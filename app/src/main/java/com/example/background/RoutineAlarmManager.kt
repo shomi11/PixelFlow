@@ -10,6 +10,8 @@ import com.example.MainActivity
 import com.example.data.local.AppDatabase
 import com.example.data.model.Routine
 import com.example.data.model.TriggerType
+import com.example.util.LocationHelper
+import com.example.util.SolarCalculator
 import com.example.util.TimeParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,11 +56,13 @@ object RoutineAlarmManager {
             return
         }
 
-        if (routine.triggerType != TriggerType.TIME) {
+        if (routine.triggerType != TriggerType.TIME &&
+            routine.triggerType != TriggerType.SUNRISE &&
+            routine.triggerType != TriggerType.SUNSET) {
             return
         }
 
-        val nextTriggerMillis = calculateNextTriggerMillis(routine.triggerConfigJson)
+        val nextTriggerMillis = calculateNextTriggerMillis(context, routine)
         if (nextTriggerMillis == null || nextTriggerMillis <= System.currentTimeMillis()) {
             Log.w(TAG, "No valid future trigger time calculated for routine ${routine.name}")
             return
@@ -161,11 +165,13 @@ object RoutineAlarmManager {
                 val db = AppDatabase.getDatabase(context)
                 val activeRoutines = db.routineDao().getActiveRoutines()
                 for (routine in activeRoutines) {
-                    if (routine.triggerType == TriggerType.TIME) {
+                    if (routine.triggerType == TriggerType.TIME ||
+                        routine.triggerType == TriggerType.SUNRISE ||
+                        routine.triggerType == TriggerType.SUNSET) {
                         scheduleExactRoutineAlarm(context, routine)
                     }
                 }
-                Log.i(TAG, "Rescheduled all active time routines (${activeRoutines.size} evaluated)")
+                Log.i(TAG, "Rescheduled all active time & solar routines (${activeRoutines.size} evaluated)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error rescheduling all routines", e)
             }
@@ -183,6 +189,60 @@ object RoutineAlarmManager {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    /**
+     * Calculates the exact epoch timestamp (in millis) for the given Routine.
+     */
+    fun calculateNextTriggerMillis(context: Context, routine: Routine): Long? {
+        return calculateNextTriggerMillis(context, routine.triggerType, routine.triggerConfigJson)
+    }
+
+    /**
+     * Calculates next trigger millis for TIME, SUNRISE, or SUNSET trigger types.
+     */
+    fun calculateNextTriggerMillis(
+        context: Context,
+        triggerType: TriggerType,
+        configJson: String
+    ): Long? {
+        return try {
+            val json = JSONObject(configJson)
+
+            if (triggerType == TriggerType.SUNRISE || triggerType == TriggerType.SUNSET) {
+                val isSunrise = (triggerType == TriggerType.SUNRISE)
+                val offsetMinutes = json.optInt("offsetMinutes", 0)
+                val daysStr = json.optString("days", "Daily")
+                val activeDays = parseActiveDays(daysStr)
+
+                // Get coordinates: prefer stored coordinates or fallback to system location
+                val userLocation = LocationHelper.getLastKnownLocation(context)
+                val lat = if (json.has("latitude") && json.optDouble("latitude") != 0.0) {
+                    json.optDouble("latitude")
+                } else {
+                    userLocation.latitude
+                }
+                val lng = if (json.has("longitude") && json.optDouble("longitude") != 0.0) {
+                    json.optDouble("longitude")
+                } else {
+                    userLocation.longitude
+                }
+
+                return SolarCalculator.calculateNextSolarTriggerMillis(
+                    nowMillis = System.currentTimeMillis(),
+                    lat = lat,
+                    lng = lng,
+                    isSunrise = isSunrise,
+                    offsetMinutes = offsetMinutes,
+                    activeDays = activeDays
+                )
+            }
+
+            calculateNextTriggerMillis(configJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculating solar/time trigger millis", e)
+            null
+        }
     }
 
     /**

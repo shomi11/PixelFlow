@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,12 +35,17 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
@@ -50,6 +56,7 @@ import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -92,6 +99,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.background.GeofenceManager
 import com.example.background.RoutineAlarmManager
 import com.example.data.model.ActionType
 import com.example.data.model.Routine
@@ -100,8 +108,12 @@ import com.example.data.model.RoutineTrigger
 import com.example.data.model.TriggerType
 import com.example.shizuku.ShizukuServiceHelper
 import com.example.util.BluetoothHelper
+import com.example.util.LocationHelper
 import com.example.util.SavedBluetoothDevice
+import com.example.util.SolarCalculator
 import com.example.util.TimeParser
+import com.example.util.UserLocation
+import java.util.Calendar
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -179,6 +191,47 @@ fun RoutineEditor(
         }
     }
 
+    // Solar Trigger State (Sunrise / Sunset)
+    var solarOffsetMinutes by remember(initialRoutine) { mutableIntStateOf(0) }
+    var solarDays by remember(initialRoutine) { mutableStateOf("Daily") }
+    var hasLocationPermission by remember { mutableStateOf(LocationHelper.hasLocationPermission(context)) }
+    var userLocation by remember { mutableStateOf(LocationHelper.getLastKnownLocation(context)) }
+    var isRefreshingLocation by remember { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val fineGranted = perms[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = perms[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        val granted = fineGranted || coarseGranted
+        hasLocationPermission = granted
+        if (granted) {
+            isRefreshingLocation = true
+            LocationHelper.requestFreshLocation(context) { loc ->
+                userLocation = loc
+                isRefreshingLocation = false
+            }
+        }
+    }
+
+    // Geolocation Trigger States
+    var geoLabel by remember(initialRoutine) { mutableStateOf("Home") }
+    var geoTransition by remember(initialRoutine) { mutableStateOf("ENTER") } // "ENTER" or "EXIT"
+    var geoRadiusMeters by remember(initialRoutine) { mutableIntStateOf(150) }
+    var geoLatitude by remember(initialRoutine) { mutableStateOf(userLocation.latitude.toString()) }
+    var geoLongitude by remember(initialRoutine) { mutableStateOf(userLocation.longitude.toString()) }
+
+    androidx.compose.runtime.LaunchedEffect(selectedTriggerType, hasLocationPermission) {
+        if ((selectedTriggerType == TriggerType.SUNRISE || selectedTriggerType == TriggerType.SUNSET || selectedTriggerType == TriggerType.LOCATION) && hasLocationPermission) {
+            val loc = LocationHelper.getLastKnownLocation(context)
+            userLocation = loc
+            if (selectedTriggerType == TriggerType.LOCATION && (geoLatitude.isBlank() || geoLatitude == "0.0")) {
+                geoLatitude = loc.latitude.toString()
+                geoLongitude = loc.longitude.toString()
+            }
+        }
+    }
+
     var batteryLevel by remember(initialRoutine) { mutableFloatStateOf(20f) }
     var batteryCharging by remember(initialRoutine) { mutableStateOf(false) }
     var appName by remember(initialRoutine) { mutableStateOf("YouTube") }
@@ -195,6 +248,31 @@ fun RoutineEditor(
                         endTime = json.optString("endTime", "22:00")
                         selectedDays = json.optString("days", "Mon, Tue, Wed, Thu, Fri, Sat, Sun")
                         intervalMinutes = json.optInt("intervalMinutes", 60)
+                    }
+                    TriggerType.SUNRISE, TriggerType.SUNSET -> {
+                        solarOffsetMinutes = json.optInt("offsetMinutes", 0)
+                        solarDays = json.optString("days", "Daily")
+                        if (json.has("latitude") && json.has("longitude")) {
+                            val lat = json.optDouble("latitude")
+                            val lng = json.optDouble("longitude")
+                            val lbl = json.optString("locationLabel", null)
+                            if (lat != 0.0 && lng != 0.0) {
+                                userLocation = UserLocation(latitude = lat, longitude = lng, label = lbl)
+                            }
+                        }
+                    }
+                    TriggerType.LOCATION -> {
+                        geoLabel = json.optString("label", "Home")
+                        geoTransition = json.optString("transition", "ENTER")
+                        geoRadiusMeters = json.optInt("radiusMeters", 150)
+                        if (json.has("latitude") && json.has("longitude")) {
+                            val lat = json.optDouble("latitude")
+                            val lng = json.optDouble("longitude")
+                            if (lat != 0.0 && lng != 0.0) {
+                                geoLatitude = lat.toString()
+                                geoLongitude = lng.toString()
+                            }
+                        }
                     }
                     TriggerType.WIFI -> {
                         wifiSsid = json.optString("ssid", "Home-5G")
@@ -316,6 +394,25 @@ fun RoutineEditor(
                 json.put("intervalMinutes", intervalMinutes)
                 json.put("useExactAlarm", true)
             }
+            TriggerType.SUNRISE, TriggerType.SUNSET -> {
+                json.put("solarEvent", selectedTriggerType.name)
+                json.put("offsetMinutes", solarOffsetMinutes)
+                json.put("days", solarDays)
+                json.put("latitude", userLocation.latitude)
+                json.put("longitude", userLocation.longitude)
+                json.put("locationLabel", userLocation.label ?: LocationHelper.formatCoordinates(userLocation.latitude, userLocation.longitude))
+                json.put("useExactAlarm", true)
+            }
+            TriggerType.LOCATION -> {
+                val lat = geoLatitude.toDoubleOrNull() ?: userLocation.latitude
+                val lng = geoLongitude.toDoubleOrNull() ?: userLocation.longitude
+                json.put("label", geoLabel.ifBlank { "Selected Location" })
+                json.put("transition", geoTransition)
+                json.put("radiusMeters", geoRadiusMeters)
+                json.put("latitude", lat)
+                json.put("longitude", lng)
+                json.put("preciseMode", true)
+            }
             TriggerType.WIFI -> {
                 json.put("ssid", wifiSsid)
                 json.put("connected", wifiConnected)
@@ -403,9 +500,11 @@ fun RoutineEditor(
 
     // Real-time calculation of next trigger time via AlarmManager helper
     val currentTriggerJson = buildTriggerConfig()
-    val nextScheduledTriggerMillis = remember(selectedTriggerType, scheduleMode, startTime, selectedDays, intervalMinutes) {
-        if (selectedTriggerType == TriggerType.TIME) {
-            RoutineAlarmManager.calculateNextTriggerMillis(currentTriggerJson)
+    val nextScheduledTriggerMillis = remember(selectedTriggerType, scheduleMode, startTime, selectedDays, intervalMinutes, solarOffsetMinutes, solarDays, userLocation) {
+        if (selectedTriggerType == TriggerType.TIME ||
+            selectedTriggerType == TriggerType.SUNRISE ||
+            selectedTriggerType == TriggerType.SUNSET) {
+            RoutineAlarmManager.calculateNextTriggerMillis(context, selectedTriggerType, currentTriggerJson)
         } else null
     }
 
@@ -538,6 +637,9 @@ fun RoutineEditor(
                             leadingIcon = {
                                 val icon = when (type) {
                                     TriggerType.TIME -> Icons.Default.Alarm
+                                    TriggerType.SUNRISE -> Icons.Default.LightMode
+                                    TriggerType.SUNSET -> Icons.Default.Nightlight
+                                    TriggerType.LOCATION -> Icons.Default.LocationOn
                                     TriggerType.WIFI -> Icons.Default.Wifi
                                     TriggerType.BLUETOOTH -> Icons.Default.Bluetooth
                                     TriggerType.BATTERY -> Icons.Default.BatteryChargingFull
@@ -946,6 +1048,703 @@ fun RoutineEditor(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    TriggerType.SUNRISE, TriggerType.SUNSET -> {
+                        val isSunrise = selectedTriggerType == TriggerType.SUNRISE
+                        val eventName = if (isSunrise) "Sunrise" else "Sunset"
+                        val eventColor = if (isSunrise) Color(0xFFF57C00) else Color(0xFF5E35B1)
+                        val eventIcon = if (isSunrise) Icons.Default.LightMode else Icons.Default.Nightlight
+
+                        // Header Banner
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = eventColor.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, eventColor.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(eventColor.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = eventIcon,
+                                        contentDescription = null,
+                                        tint = eventColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "$eventName Routine Trigger",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Fires based on real-time astronomical calculation for your location",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        // 1. Real Location Card
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Schedule,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "User Location",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            if (hasLocationPermission) {
+                                                isRefreshingLocation = true
+                                                LocationHelper.requestFreshLocation(context) { loc ->
+                                                    userLocation = loc
+                                                    isRefreshingLocation = false
+                                                }
+                                            } else {
+                                                locationPermissionLauncher.launch(
+                                                    arrayOf(
+                                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                                    )
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp).testTag("refresh_location_btn")
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Refresh,
+                                            contentDescription = "Refresh Location",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                val displayLabel = userLocation.label ?: LocationHelper.formatCoordinates(userLocation.latitude, userLocation.longitude)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = displayLabel,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = "Coordinates: ${LocationHelper.formatCoordinates(userLocation.latitude, userLocation.longitude)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (hasLocationPermission) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
+                                        ) {
+                                            Text(
+                                                text = if (hasLocationPermission) "GPS Ready" else "Using Default",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                color = if (hasLocationPermission) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (!hasLocationPermission) {
+                                    Button(
+                                        onClick = {
+                                            locationPermissionLauncher.launch(
+                                                arrayOf(
+                                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                                )
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().testTag("grant_location_permission_btn"),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Grant Location Access for Exact Solar Times")
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Today's Solar Calculations Preview
+                        val todaySolar = remember(userLocation) {
+                            SolarCalculator.calculateSolarTimes(Calendar.getInstance(), userLocation.latitude, userLocation.longitude)
+                        }
+
+                        Text(
+                            text = "Today's Solar Schedule at Your Location",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Sunrise card
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSunrise) Color(0xFFFFF3E0) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, if (isSunrise) Color(0xFFF57C00) else Color.Transparent),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.LightMode, contentDescription = null, tint = Color(0xFFF57C00), modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sunrise", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val sunriseTimeStr = todaySolar.sunriseMillis?.let {
+                                        val cal = Calendar.getInstance().apply { timeInMillis = it }
+                                        TimeParser.format12Hour(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+                                    } ?: "N/A"
+                                    Text(
+                                        text = sunriseTimeStr,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (isSunrise) Color(0xFFE65100) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            // Sunset card
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (!isSunrise) Color(0xFFEDE7F6) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, if (!isSunrise) Color(0xFF5E35B1) else Color.Transparent),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Nightlight, contentDescription = null, tint = Color(0xFF5E35B1), modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sunset", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val sunsetTimeStr = todaySolar.sunsetMillis?.let {
+                                        val cal = Calendar.getInstance().apply { timeInMillis = it }
+                                        TimeParser.format12Hour(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+                                    } ?: "N/A"
+                                    Text(
+                                        text = sunsetTimeStr,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (!isSunrise) Color(0xFF512DA8) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+
+                        // 3. Offset selector ("When to trigger")
+                        Text(
+                            text = "Trigger Timing Offset",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        val offsetOptions = listOf(
+                            -60 to "1h before",
+                            -30 to "30m before",
+                            -15 to "15m before",
+                            0 to "At $eventName",
+                            15 to "15m after",
+                            30 to "30m after",
+                            60 to "1h after"
+                        )
+
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            offsetOptions.forEach { (offset, label) ->
+                                val isSelected = solarOffsetMinutes == offset
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { solarOffsetMinutes = offset },
+                                    label = { Text(label) },
+                                    modifier = Modifier.testTag("solar_offset_${offset}")
+                                )
+                            }
+                        }
+
+                        // 4. Days of the week selection
+                        Text(
+                            text = "Repeat Days",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        val dayOptions = listOf("Daily", "Weekdays", "Weekends")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            dayOptions.forEach { opt ->
+                                val isSelected = solarDays.equals(opt, ignoreCase = true)
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { solarDays = opt },
+                                    label = { Text(opt) },
+                                    modifier = Modifier.weight(1f).testTag("solar_days_${opt.lowercase()}")
+                                )
+                            }
+                        }
+
+                        // 5. Next trigger preview badge
+                        val solarNextMillis = remember(selectedTriggerType, solarOffsetMinutes, solarDays, userLocation) {
+                            val cfg = buildTriggerConfig()
+                            RoutineAlarmManager.calculateNextTriggerMillis(context, selectedTriggerType, cfg)
+                        }
+
+                        if (solarNextMillis != null) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = eventColor.copy(alpha = 0.14f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = eventIcon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = eventColor
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Next trigger: ${RoutineAlarmManager.formatNextTriggerHumanReadable(solarNextMillis)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    TriggerType.LOCATION -> {
+                        val geoThemeColor = Color(0xFF00897B) // Precision Emerald / Teal for Geolocation
+
+                        // Header Banner
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = geoThemeColor.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, geoThemeColor.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(geoThemeColor.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = geoThemeColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Precision Geolocation Trigger",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Trigger actions when entering or leaving a precise geographic boundary using GPS & network location.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        // 1. Permission status card if not granted
+                        if (!hasLocationPermission) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Location Permission Required",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Precise Geofencing requires location access to monitor boundaries in the background.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = {
+                                            locationPermissionLauncher.launch(
+                                                arrayOf(
+                                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                                )
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().testTag("grant_geo_permission_btn")
+                                    ) {
+                                        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Grant Precise Location Access")
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Location Label & Presets
+                        Text(
+                            text = "Target Area Name / Label",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        OutlinedTextField(
+                            value = geoLabel,
+                            onValueChange = { geoLabel = it },
+                            label = { Text("Location Name") },
+                            placeholder = { Text("e.g. Home, Office, Gym") },
+                            leadingIcon = {
+                                Icon(Icons.Default.Place, contentDescription = null, tint = geoThemeColor)
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("geo_label_input"),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+
+                        // Quick place presets
+                        val placePresets = listOf("Home", "Office", "Gym", "School", "Store")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            placePresets.forEach { preset ->
+                                val isSelected = geoLabel.equals(preset, ignoreCase = true)
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { geoLabel = preset },
+                                    label = { Text(preset, fontSize = 12.sp) },
+                                    modifier = Modifier.testTag("preset_$preset")
+                                )
+                            }
+                        }
+
+                        // 3. Current Location & Coordinate Tools
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.MyLocation,
+                                            contentDescription = null,
+                                            tint = geoThemeColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Device GPS Location",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    FilledTonalButton(
+                                        onClick = {
+                                            isRefreshingLocation = true
+                                            LocationHelper.requestFreshLocation(context) { freshLoc ->
+                                                userLocation = freshLoc
+                                                geoLatitude = freshLoc.latitude.toString()
+                                                geoLongitude = freshLoc.longitude.toString()
+                                                isRefreshingLocation = false
+                                            }
+                                        },
+                                        enabled = !isRefreshingLocation,
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.testTag("refresh_geo_location_btn")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(if (isRefreshingLocation) "Updating..." else "Use Current GPS", fontSize = 12.sp)
+                                    }
+                                }
+
+                                Text(
+                                    text = "Current: ${LocationHelper.formatCoordinates(userLocation.latitude, userLocation.longitude)} (${userLocation.provider})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                // Manual coordinate coordinates
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    OutlinedTextField(
+                                        value = geoLatitude,
+                                        onValueChange = { geoLatitude = it },
+                                        label = { Text("Latitude") },
+                                        placeholder = { Text("37.7749") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f).testTag("geo_lat_input"),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = geoLongitude,
+                                        onValueChange = { geoLongitude = it },
+                                        label = { Text("Longitude") },
+                                        placeholder = { Text("-122.4194") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f).testTag("geo_lng_input"),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // 4. Geofence Transition Type (Enter vs Exit)
+                        Text(
+                            text = "Trigger Event (Condition)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            FilterChip(
+                                selected = geoTransition == "ENTER",
+                                onClick = { geoTransition = "ENTER" },
+                                label = { Text("When Arriving (Enter)") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.NearMe,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f).testTag("geo_transition_enter")
+                            )
+                            FilterChip(
+                                selected = geoTransition == "EXIT",
+                                onClick = { geoTransition = "EXIT" },
+                                label = { Text("When Leaving (Exit)") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.NearMe,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f).testTag("geo_transition_exit")
+                            )
+                        }
+
+                        // 5. Geofence Precision Radius
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Geofence Radius (Precision)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = geoThemeColor.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "${geoRadiusMeters} meters",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = geoThemeColor,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Slider(
+                            value = geoRadiusMeters.toFloat(),
+                            onValueChange = { geoRadiusMeters = it.toInt() },
+                            valueRange = 50f..1000f,
+                            steps = 18,
+                            modifier = Modifier.fillMaxWidth().testTag("geo_radius_slider")
+                        )
+
+                        val radiusPresets = listOf(50 to "50m (Precise)", 100 to "100m", 250 to "250m", 500 to "500m", 1000 to "1km")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            radiusPresets.forEach { (radiusVal, labelText) ->
+                                val isSelected = geoRadiusMeters == radiusVal
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { geoRadiusMeters = radiusVal },
+                                    label = { Text(labelText, fontSize = 11.sp) },
+                                    modifier = Modifier.testTag("geo_radius_${radiusVal}")
+                                )
+                            }
+                        }
+
+                        // 6. Real-time Distance & Geofence Status Preview
+                        val parsedLat = geoLatitude.toDoubleOrNull()
+                        val parsedLng = geoLongitude.toDoubleOrNull()
+                        if (parsedLat != null && parsedLng != null) {
+                            val currentDist = GeofenceManager.computeDistanceMeters(
+                                userLocation.latitude,
+                                userLocation.longitude,
+                                parsedLat,
+                                parsedLng
+                            )
+                            val isCurrentlyInside = currentDist <= geoRadiusMeters
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isCurrentlyInside) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isCurrentlyInside) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCurrentlyInside) Icons.Default.CheckCircle else Icons.Default.Place,
+                                        contentDescription = null,
+                                        tint = if (isCurrentlyInside) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = if (isCurrentlyInside) "Currently INSIDE Geofence zone" else "Currently OUTSIDE Geofence zone",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isCurrentlyInside) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Distance: ~${currentDist.toInt()}m from center point (Radius: ${geoRadiusMeters}m)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 7. Technology Notice
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = geoThemeColor
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Hardware GPS Proximity Alert + WorkManager background fail-safe monitoring enabled.",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
 

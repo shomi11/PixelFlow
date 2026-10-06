@@ -185,6 +185,14 @@ class RoutineWorker(
                             }
                         }
                     }
+                    TriggerType.LOCATION -> {
+                        if (isLocationMatch(routine, appContext)) {
+                            val tenMinutesAgo = System.currentTimeMillis() - 10 * 60 * 1000
+                            if (routine.lastExecutedTimestamp < tenMinutesAgo) {
+                                executeRoutineWithShizuku(routine, "Geolocation Proximity Active", dao)
+                            }
+                        }
+                    }
                     else -> {
                         // Wi-Fi / Bluetooth / App triggers are received on-demand
                     }
@@ -267,6 +275,31 @@ class RoutineWorker(
                 batteryStatus.isCharging
             } else {
                 batteryStatus.level <= targetLevel && !batteryStatus.isCharging
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isLocationMatch(routine: Routine, context: Context): Boolean {
+        return try {
+            val config = JSONObject(routine.triggerConfigJson)
+            val targetLat = config.optDouble("latitude", 0.0)
+            val targetLng = config.optDouble("longitude", 0.0)
+            val radius = config.optInt("radiusMeters", 150)
+            val transition = config.optString("transition", "ENTER").uppercase()
+
+            if (targetLat == 0.0 && targetLng == 0.0) return false
+
+            val currentLoc = com.example.util.LocationHelper.getLastKnownLocation(context)
+            val distance = GeofenceManager.computeDistanceMeters(
+                currentLoc.latitude, currentLoc.longitude, targetLat, targetLng
+            )
+
+            if (transition == "ENTER") {
+                distance <= radius
+            } else {
+                distance > radius
             }
         } catch (e: Exception) {
             false

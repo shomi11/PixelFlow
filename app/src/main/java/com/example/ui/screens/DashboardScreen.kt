@@ -40,8 +40,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -493,6 +496,7 @@ fun RoutineCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val context = LocalContext.current
     val accentColor = try {
         Color(android.graphics.Color.parseColor(routine.colorHex))
     } catch (e: Exception) {
@@ -590,9 +594,13 @@ fun RoutineCard(
                 }
             }
 
-            if (routine.triggerType == TriggerType.TIME && routine.isEnabled) {
+            val isScheduledRoutine = routine.triggerType == TriggerType.TIME ||
+                    routine.triggerType == TriggerType.SUNRISE ||
+                    routine.triggerType == TriggerType.SUNSET
+
+            if (isScheduledRoutine && routine.isEnabled) {
                 val nextMillis = remember(routine.triggerConfigJson, routine.isEnabled) {
-                    RoutineAlarmManager.calculateNextTriggerMillis(routine.triggerConfigJson)
+                    RoutineAlarmManager.calculateNextTriggerMillis(context, routine)
                 }
                 if (nextMillis != null) {
                     Spacer(modifier = Modifier.height(6.dp))
@@ -799,6 +807,9 @@ fun ShizukuGuideDialog(onDismiss: () -> Unit) {
 fun getTriggerIcon(type: TriggerType): ImageVector {
     return when (type) {
         TriggerType.TIME -> Icons.Default.Schedule
+        TriggerType.SUNRISE -> Icons.Default.LightMode
+        TriggerType.SUNSET -> Icons.Default.Nightlight
+        TriggerType.LOCATION -> Icons.Default.LocationOn
         TriggerType.WIFI -> Icons.Default.Wifi
         TriggerType.BLUETOOTH -> Icons.Default.Bluetooth
         TriggerType.BATTERY -> Icons.Default.BatteryChargingFull

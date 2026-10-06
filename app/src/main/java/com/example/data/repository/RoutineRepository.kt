@@ -155,6 +155,32 @@ class RoutineRepository(
             )
         )
 
+        // 4. Sunset Dark Theme
+        val sunsetTrigger = JSONObject().apply {
+            put("solarEvent", "SUNSET")
+            put("offsetMinutes", 0)
+            put("days", "Daily")
+            put("useExactAlarm", true)
+        }.toString()
+
+        val sunsetActions = JSONArray().apply {
+            put(RoutineActionItem(type = ActionType.DARK_MODE, enabledState = true).toJsonObject())
+            put(RoutineActionItem(type = ActionType.AOD, enabledState = false).toJsonObject())
+        }.toString()
+
+        routineDao.insertRoutine(
+            RoutineEntity(
+                title = "Sunset Dark Theme",
+                description = "Switches to Dark Theme automatically at sunset based on local astronomical calculations",
+                isEnabled = true,
+                iconName = "nightlight",
+                colorHex = "#5E35B1",
+                triggerType = TriggerType.SUNSET,
+                triggerConfigJson = sunsetTrigger,
+                actionsJson = sunsetActions
+            )
+        )
+
         // Mark permanently as populated so user deletions or state toggles are never overwritten
         prefs?.edit()?.putBoolean(PREF_DEFAULTS_POPULATED, true)?.apply()
     }

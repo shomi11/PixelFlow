@@ -25,6 +25,7 @@ class BootReceiver : BroadcastReceiver() {
             Log.d("BootReceiver", "Device rebooted. Setting up routine background worker and precision alarms.")
             WorkManagerHelper.setupPeriodicMonitoring(context)
             RoutineAlarmManager.rescheduleAllRoutines(context)
+            GeofenceManager.registerAllGeofences(context)
         }
     }
 }

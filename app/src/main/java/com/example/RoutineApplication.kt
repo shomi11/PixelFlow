@@ -45,11 +45,12 @@ class RoutineApplication : Application(), Configuration.Provider {
             Log.e(TAG, "Error initializing WorkManager in RoutineApplication", e)
         }
 
-        // 3. Initialize background helpers: Shizuku bridge, Network monitor, and precision alarms
+        // 3. Initialize background helpers: Shizuku bridge, Network monitor, and precision alarms & geofences
         try {
             ShizukuManager.init()
             NetworkStatusMonitor.initialize(this)
             RoutineAlarmManager.rescheduleAllRoutines(this)
+            com.example.background.GeofenceManager.registerAllGeofences(this)
         } catch (e: Throwable) {
             Log.e(TAG, "Error initializing background helpers in RoutineApplication", e)
         }

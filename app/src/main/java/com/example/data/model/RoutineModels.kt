@@ -12,6 +12,9 @@ import org.json.JSONObject
  */
 enum class TriggerType(val displayName: String, val description: String) {
     TIME("Time Schedule", "Active during specific hours and days"),
+    SUNRISE("Sunrise", "At sunrise based on your real location"),
+    SUNSET("Sunset", "At sunset based on your real location"),
+    LOCATION("Geolocation", "When arriving at or leaving a specific location"),
     WIFI("Wi-Fi Network", "When connected or disconnected from a Wi-Fi SSID"),
     BLUETOOTH("Bluetooth Device", "When connected or disconnected from a Bluetooth device"),
     BATTERY("Battery Level", "When battery level drops below a threshold or charging state changes"),
@@ -203,6 +206,41 @@ data class Routine(
                         "SPECIFIC_TIME" -> "At $friendlyTime"
                         else -> "Daily at $friendlyTime"
                     }
+                }
+                TriggerType.SUNRISE -> {
+                    val offset = json.optInt("offsetMinutes", 0)
+                    val days = json.optString("days", "Daily")
+                    val offsetText = when {
+                        offset < 0 -> "${-offset}m before Sunrise"
+                        offset > 0 -> "${offset}m after Sunrise"
+                        else -> "At Sunrise"
+                    }
+                    if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) {
+                        offsetText
+                    } else {
+                        "$offsetText ($days)"
+                    }
+                }
+                TriggerType.SUNSET -> {
+                    val offset = json.optInt("offsetMinutes", 0)
+                    val days = json.optString("days", "Daily")
+                    val offsetText = when {
+                        offset < 0 -> "${-offset}m before Sunset"
+                        offset > 0 -> "${offset}m after Sunset"
+                        else -> "At Sunset"
+                    }
+                    if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) {
+                        offsetText
+                    } else {
+                        "$offsetText ($days)"
+                    }
+                }
+                TriggerType.LOCATION -> {
+                    val label = json.optString("label", "Geofence")
+                    val transition = json.optString("transition", "ENTER")
+                    val radius = json.optInt("radiusMeters", 150)
+                    val event = if (transition == "EXIT") "Leaving" else "Arriving at"
+                    "$event \"$label\" (${radius}m)"
                 }
                 TriggerType.WIFI -> {
                     val ssid = json.optString("ssid", "Any Network")

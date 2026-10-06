@@ -165,9 +165,16 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             val newState = !routine.isEnabled
             repository.toggleRoutine(routine.id, newState)
             if (newState) {
-                RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), routine.copy(isEnabled = true))
+                if (routine.triggerType == TriggerType.TIME ||
+                    routine.triggerType == TriggerType.SUNRISE ||
+                    routine.triggerType == TriggerType.SUNSET) {
+                    RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), routine.copy(isEnabled = true))
+                } else if (routine.triggerType == TriggerType.LOCATION) {
+                    com.example.background.GeofenceManager.registerGeofence(getApplication(), routine.copy(isEnabled = true))
+                }
             } else {
                 RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
+                com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
             }
             _userMessage.emit("Routine \"${routine.title}\" ${if (newState) "enabled" else "disabled"}")
         }
@@ -181,10 +188,17 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             repository.toggleRoutine(routineId, isEnabled)
             if (isEnabled) {
                 repository.getRoutineById(routineId)?.let {
-                    RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), it.copy(isEnabled = true))
+                    if (it.triggerType == TriggerType.TIME ||
+                        it.triggerType == TriggerType.SUNRISE ||
+                        it.triggerType == TriggerType.SUNSET) {
+                        RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), it.copy(isEnabled = true))
+                    } else if (it.triggerType == TriggerType.LOCATION) {
+                        com.example.background.GeofenceManager.registerGeofence(getApplication(), it.copy(isEnabled = true))
+                    }
                 }
             } else {
                 RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
+                com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             }
             _userMessage.emit("Routine ${if (isEnabled) "enabled" else "disabled"}")
         }
@@ -209,6 +223,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun deleteRoutine(routine: Routine) {
         viewModelScope.launch {
             RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
+            com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
             repository.deleteRoutine(routine)
             _userMessage.emit("Routine \"${routine.title}\" deleted")
         }
@@ -217,6 +232,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun deleteRoutine(routineId: Long) {
         viewModelScope.launch {
             RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
+            com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             repository.deleteRoutineById(routineId)
             _userMessage.emit("Routine deleted")
         }
@@ -233,8 +249,15 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 _userMessage.emit("Updated \"${routine.title}\"")
                 routine
             }
-            if (savedRoutine.isEnabled && savedRoutine.triggerType == TriggerType.TIME) {
-                RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), savedRoutine)
+            if (savedRoutine.isEnabled) {
+                if (savedRoutine.triggerType == TriggerType.TIME ||
+                    savedRoutine.triggerType == TriggerType.SUNRISE ||
+                    savedRoutine.triggerType == TriggerType.SUNSET
+                ) {
+                    RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), savedRoutine)
+                } else if (savedRoutine.triggerType == TriggerType.LOCATION) {
+                    com.example.background.GeofenceManager.registerGeofence(getApplication(), savedRoutine)
+                }
             }
             onComplete()
         }
