@@ -33,12 +33,15 @@ class BootReceiver : BroadcastReceiver() {
 class BatteryTriggerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        val isCharging = action == Intent.ACTION_POWER_CONNECTED
-        val isDischarging = action == Intent.ACTION_POWER_DISCONNECTED
+        val isPowerConnected = action == Intent.ACTION_POWER_CONNECTED
+        val isPowerDisconnected = action == Intent.ACTION_POWER_DISCONNECTED
+        val isBatteryLow = action == Intent.ACTION_BATTERY_LOW
 
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
         val batteryPct = if (level != -1 && scale != -1) (level * 100 / scale.toFloat()).toInt() else -1
+
+        val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
 
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -53,16 +56,31 @@ class BatteryTriggerReceiver : BroadcastReceiver() {
                     val reqCharging = config.optBoolean("charging", false)
                     val targetLevel = config.optInt("level", 20)
 
-                    val matches = if (reqCharging) {
-                        isCharging
-                    } else if (batteryPct > 0) {
-                        batteryPct <= targetLevel && !isCharging
-                    } else {
-                        false
-                    }
+                    val lastChargedKey = "last_charging_${routine.id}"
+                    val lastTriggeredKey = "last_battery_triggered_${routine.id}"
+                    val wasCharging = prefs.getBoolean(lastChargedKey, false)
 
-                    if (matches) {
-                        engine.executeRoutine(routine, "Battery Event: $action")
+                    if (reqCharging) {
+                        // Only trigger when charger is plugged in (transition from unplugged to plugged)
+                        if (isPowerConnected && !wasCharging) {
+                            prefs.edit().putBoolean(lastChargedKey, true).apply()
+                            engine.executeRoutine(routine, "Charging Connected")
+                        } else if (isPowerDisconnected) {
+                            prefs.edit().putBoolean(lastChargedKey, false).apply()
+                        }
+                    } else {
+                        // Battery level trigger: only trigger on transition below target level
+                        val oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000L)
+                        val lastTriggeredTime = prefs.getLong(lastTriggeredKey, 0L)
+
+                        val isBelowThreshold = batteryPct in 1..targetLevel || isBatteryLow
+                        if (isBelowThreshold && !isPowerConnected && lastTriggeredTime < oneHourAgo) {
+                            prefs.edit().putLong(lastTriggeredKey, System.currentTimeMillis()).apply()
+                            engine.executeRoutine(routine, "Battery Low ($batteryPct%)")
+                        } else if (batteryPct > targetLevel + 5) {
+                            // Reset threshold trigger when battery charges back above target + 5%
+                            prefs.edit().putLong(lastTriggeredKey, 0L).apply()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -94,6 +112,8 @@ class WifiTriggerReceiver : BroadcastReceiver() {
         }
         val currentSsid = wifiInfo?.ssid?.trim('"') ?: ""
 
+        val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
+
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -107,18 +127,35 @@ class WifiTriggerReceiver : BroadcastReceiver() {
                     val reqConnected = config.optBoolean("connected", true)
                     val targetSsid = config.optString("ssid", "").trim('"')
 
-                    val matches = if (reqConnected == isConnected) {
-                        if (targetSsid.isBlank() || targetSsid.equals("Any Network", ignoreCase = true)) {
-                            true
-                        } else {
+                    val lastStateKey = "wifi_last_connected_${routine.id}"
+                    val lastSsidKey = "wifi_last_ssid_${routine.id}"
+                    val wasConnected = prefs.getBoolean(lastStateKey, false)
+                    val lastSsid = prefs.getString(lastSsidKey, "") ?: ""
+
+                    // Check if target SSID matches
+                    val isTargetNetwork = targetSsid.isBlank() ||
+                            targetSsid.equals("Any Network", ignoreCase = true) ||
                             currentSsid.equals(targetSsid, ignoreCase = true)
+
+                    if (reqConnected) {
+                        // Trigger only when transitioning from disconnected to connected on target network
+                        if (isConnected && isTargetNetwork && (!wasConnected || lastSsid != currentSsid)) {
+                            prefs.edit()
+                                .putBoolean(lastStateKey, true)
+                                .putString(lastSsidKey, currentSsid)
+                                .apply()
+                            engine.executeRoutine(routine, "Wi-Fi: Connected to $currentSsid")
+                        } else if (!isConnected) {
+                            prefs.edit().putBoolean(lastStateKey, false).putString(lastSsidKey, "").apply()
                         }
                     } else {
-                        false
-                    }
-
-                    if (matches) {
-                        engine.executeRoutine(routine, "Wi-Fi: ${if (isConnected) "Connected to $currentSsid" else "Disconnected"}")
+                        // Disconnect trigger: only when transitioning from connected to disconnected
+                        if (!isConnected && wasConnected) {
+                            prefs.edit().putBoolean(lastStateKey, false).apply()
+                            engine.executeRoutine(routine, "Wi-Fi: Disconnected")
+                        } else if (isConnected) {
+                            prefs.edit().putBoolean(lastStateKey, true).putString(lastSsidKey, currentSsid).apply()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -146,6 +183,8 @@ class BluetoothTriggerReceiver : BroadcastReceiver() {
         }
         val deviceName = try { device?.name ?: "Unknown Device" } catch (e: SecurityException) { "Bluetooth Device" }
 
+        val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
+
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -159,22 +198,38 @@ class BluetoothTriggerReceiver : BroadcastReceiver() {
                     val reqConnected = config.optBoolean("connected", true)
                     val targetDevice = config.optString("device", "").trim()
 
-                    val matches = if (reqConnected == isConnected) {
-                        if (targetDevice.isBlank() ||
-                            targetDevice.equals("Any Device", ignoreCase = true) ||
-                            targetDevice.equals("Any Paired Device", ignoreCase = true)
-                        ) {
-                            true
-                        } else {
-                            deviceName.contains(targetDevice, ignoreCase = true) ||
-                                (device?.address?.equals(targetDevice, ignoreCase = true) == true)
-                        }
+                    val lastBtStateKey = "bt_last_connected_${routine.id}"
+                    val wasBtConnected = prefs.getBoolean(lastBtStateKey, false)
+                    val lastTriggeredKey = "bt_last_time_${routine.id}"
+                    val lastTriggeredTime = prefs.getLong(lastTriggeredKey, 0L)
+                    val thirtySecondsAgo = System.currentTimeMillis() - 30_000L
+
+                    val isTargetDevice = if (targetDevice.isBlank() ||
+                        targetDevice.equals("Any Device", ignoreCase = true) ||
+                        targetDevice.equals("Any Paired Device", ignoreCase = true)
+                    ) {
+                        true
                     } else {
-                        false
+                        deviceName.contains(targetDevice, ignoreCase = true) ||
+                            (device?.address?.equals(targetDevice, ignoreCase = true) == true)
                     }
 
-                    if (matches) {
-                        engine.executeRoutine(routine, "Bluetooth: ${if (isConnected) "Connected $deviceName" else "Disconnected $deviceName"}")
+                    if (isTargetDevice) {
+                        if (reqConnected && isConnected && !wasBtConnected && lastTriggeredTime < thirtySecondsAgo) {
+                            prefs.edit()
+                                .putBoolean(lastBtStateKey, true)
+                                .putLong(lastTriggeredKey, System.currentTimeMillis())
+                                .apply()
+                            engine.executeRoutine(routine, "Bluetooth: Connected $deviceName")
+                        } else if (!reqConnected && isDisconnected && wasBtConnected && lastTriggeredTime < thirtySecondsAgo) {
+                            prefs.edit()
+                                .putBoolean(lastBtStateKey, false)
+                                .putLong(lastTriggeredKey, System.currentTimeMillis())
+                                .apply()
+                            engine.executeRoutine(routine, "Bluetooth: Disconnected $deviceName")
+                        } else if (isDisconnected) {
+                            prefs.edit().putBoolean(lastBtStateKey, false).apply()
+                        }
                     }
                 }
             } catch (e: Exception) {

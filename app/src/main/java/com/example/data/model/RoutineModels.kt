@@ -267,6 +267,54 @@ data class Routine(
         }
     }
 
+    /**
+     * Checks if this routine is currently running in its scheduled active time window.
+     */
+    fun isCurrentlyInActiveWindow(): Boolean {
+        if (!isEnabled) return false
+        val trigger = triggers.firstOrNull() ?: return false
+        if (trigger.type != TriggerType.TIME) return false
+
+        return try {
+            val json = JSONObject(trigger.configJson)
+            val startTimeStr = json.optString("startTime", "")
+            val endTimeStr = json.optString("endTime", "")
+            val daysStr = json.optString("days", "Daily")
+
+            val now = java.util.Calendar.getInstance()
+            val dayName = when (now.get(java.util.Calendar.DAY_OF_WEEK)) {
+                java.util.Calendar.MONDAY -> "Mon"
+                java.util.Calendar.TUESDAY -> "Tue"
+                java.util.Calendar.WEDNESDAY -> "Wed"
+                java.util.Calendar.THURSDAY -> "Thu"
+                java.util.Calendar.FRIDAY -> "Fri"
+                java.util.Calendar.SATURDAY -> "Sat"
+                java.util.Calendar.SUNDAY -> "Sun"
+                else -> ""
+            }
+
+            if (daysStr != "Daily" && daysStr != "Every Day" && !daysStr.contains(dayName, ignoreCase = true)) {
+                return false
+            }
+
+            val parsedStart = com.example.util.TimeParser.parseToHourMinute(startTimeStr) ?: return false
+            val parsedEnd = com.example.util.TimeParser.parseToHourMinute(endTimeStr) ?: return false
+
+            val startMin = parsedStart.first * 60 + parsedStart.second
+            val endMin = parsedEnd.first * 60 + parsedEnd.second
+            if (startMin == endMin) return false
+
+            val currentMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+            if (startMin <= endMin) {
+                currentMinutes in startMin..endMin
+            } else {
+                currentMinutes >= startMin || currentMinutes <= endMin
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     @Ignore
     constructor(
         id: Long = 0,

@@ -146,60 +146,20 @@ class RoutineWorker(
     }
 
     /**
-     * Checks all active routines against current system schedule and sensor states.
+     * Performs background scheduler verification and health checks.
+     * Prevents spurious periodic executions while ensuring hardware alarms and geofences remain active.
      */
     private suspend fun observeAndExecuteScheduledRoutines(
         dao: com.example.data.local.RoutineDao
     ) {
-        val activeRoutines = dao.getActiveRoutines()
-        if (activeRoutines.isEmpty()) {
-            Log.d(TAG, "No active routines found in database")
-            return
-        }
-
-        val now = Calendar.getInstance()
-        val currentHour = now.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = now.get(Calendar.MINUTE)
-        val currentMinutesOfDay = currentHour * 60 + currentMinute
-        val currentDayOfWeek = now.get(Calendar.DAY_OF_WEEK)
-
-        val batteryState = getBatteryStatus(appContext)
-
-        for (routine in activeRoutines) {
-            try {
-                when (routine.triggerType) {
-                    TriggerType.TIME -> {
-                        if (isTimeMatch(routine, currentMinutesOfDay, currentDayOfWeek)) {
-                            // Debounce execution to avoid rapid re-triggering (e.g. within 10 minutes)
-                            val tenMinutesAgo = System.currentTimeMillis() - 10 * 60 * 1000
-                            if (routine.lastExecutedTimestamp < tenMinutesAgo) {
-                                executeRoutineWithShizuku(routine, "Scheduled Time Active", dao)
-                            }
-                        }
-                    }
-                    TriggerType.BATTERY -> {
-                        if (isBatteryMatch(routine, batteryState)) {
-                            val fiveMinutesAgo = System.currentTimeMillis() - 5 * 60 * 1000
-                            if (routine.lastExecutedTimestamp < fiveMinutesAgo) {
-                                executeRoutineWithShizuku(routine, "Battery Trigger Event", dao)
-                            }
-                        }
-                    }
-                    TriggerType.LOCATION -> {
-                        if (isLocationMatch(routine, appContext)) {
-                            val tenMinutesAgo = System.currentTimeMillis() - 10 * 60 * 1000
-                            if (routine.lastExecutedTimestamp < tenMinutesAgo) {
-                                executeRoutineWithShizuku(routine, "Geolocation Proximity Active", dao)
-                            }
-                        }
-                    }
-                    else -> {
-                        // Wi-Fi / Bluetooth / App triggers are received on-demand
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error evaluating schedule for routine ${routine.name}", e)
-            }
+        Log.i(TAG, "RoutineWorker performing periodic background health check & scheduler maintenance")
+        try {
+            // Verify and maintain exact AlarmManager alarms for scheduled, sunrise, and sunset routines
+            RoutineAlarmManager.rescheduleAllRoutines(appContext)
+            // Verify and maintain hardware geofence proximity alerts for active geolocation routines
+            GeofenceManager.registerAllGeofences(appContext)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing background scheduler maintenance in RoutineWorker", e)
         }
     }
 

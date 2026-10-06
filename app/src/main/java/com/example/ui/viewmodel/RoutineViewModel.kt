@@ -94,6 +94,11 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         )
 
     /**
+     * Set of currently executing routine IDs.
+     */
+    val runningRoutineIds: StateFlow<Set<Long>> = com.example.service.RoutineExecutionTracker.runningRoutineIds
+
+    /**
      * Alias for routine list StateFlow.
      */
     val routineList: StateFlow<List<Routine>> = routines

@@ -15,7 +15,29 @@ import com.example.notification.RoutineNotificationManager
 import com.example.shizuku.ShellResult
 import com.example.shizuku.ShizukuManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+
+/**
+ * Tracks actively executing routine IDs in real-time across the application.
+ */
+object RoutineExecutionTracker {
+    private val _runningRoutineIds = MutableStateFlow<Set<Long>>(emptySet())
+    val runningRoutineIds: StateFlow<Set<Long>> = _runningRoutineIds.asStateFlow()
+
+    fun markRunning(routineId: Long) {
+        _runningRoutineIds.update { it + routineId }
+    }
+
+    fun markFinished(routineId: Long) {
+        _runningRoutineIds.update { it - routineId }
+    }
+
+    fun isRunning(routineId: Long): Boolean = _runningRoutineIds.value.contains(routineId)
+}
 
 class RoutineExecutionEngine(private val context: Context) {
     private val TAG = "RoutineExecutionEngine"
@@ -24,6 +46,13 @@ class RoutineExecutionEngine(private val context: Context) {
 
     suspend fun executeRoutine(routine: RoutineEntity, triggerReason: String = "Manual Execution"): Boolean = withContext(Dispatchers.IO) {
         Log.i(TAG, "Executing routine: ${routine.title} (Trigger: $triggerReason)")
+        RoutineExecutionTracker.markRunning(routine.id)
+        try {
+            dao.updateExecutionStatus(routine.id, System.currentTimeMillis(), "RUNNING")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed updating execution status to RUNNING", e)
+        }
+
         val actions = routine.parseActions()
         val logBuilder = StringBuilder()
         val commandsExecuted = mutableListOf<String>()
@@ -33,37 +62,41 @@ class RoutineExecutionEngine(private val context: Context) {
         var shizukuUsed = false
         var lastExitCode = 0
 
-        for (action in actions) {
-            val result = executeAction(action)
-            if (action.type.requiresShizuku) {
-                shizukuUsed = true
-            }
-            if (!result.isSuccess) {
-                overallSuccess = false
-            }
-            if (result.exitCode != 0) {
-                lastExitCode = result.exitCode
-            }
-            if (result.executedCommand.isNotBlank()) {
-                commandsExecuted.add(result.executedCommand)
-            }
-            if (result.stdout.isNotBlank()) {
-                stdoutList.add("[${action.type.name}] ${result.stdout}")
-            }
-            if (result.stderr.isNotBlank()) {
-                errorList.add("[${action.type.name}] Error: ${result.stderr}")
-            }
+        try {
+            for (action in actions) {
+                val result = executeAction(action)
+                if (action.type.requiresShizuku) {
+                    shizukuUsed = true
+                }
+                if (!result.isSuccess) {
+                    overallSuccess = false
+                }
+                if (result.exitCode != 0) {
+                    lastExitCode = result.exitCode
+                }
+                if (result.executedCommand.isNotBlank()) {
+                    commandsExecuted.add(result.executedCommand)
+                }
+                if (result.stdout.isNotBlank()) {
+                    stdoutList.add("[${action.type.name}] ${result.stdout}")
+                }
+                if (result.stderr.isNotBlank()) {
+                    errorList.add("[${action.type.name}] Error: ${result.stderr}")
+                }
 
-            logBuilder.append("[${action.type.name}] -> ")
-            if (result.stdout.isNotBlank()) {
-                logBuilder.append(result.stdout).append(" | ")
+                logBuilder.append("[${action.type.name}] -> ")
+                if (result.stdout.isNotBlank()) {
+                    logBuilder.append(result.stdout).append(" | ")
+                }
+                if (result.stderr.isNotBlank()) {
+                    logBuilder.append("Error: ").append(result.stderr).append(" | ")
+                }
+                if (result.stdout.isBlank() && result.stderr.isBlank()) {
+                    logBuilder.append(if (result.isSuccess) "Applied" else "Failed").append(" | ")
+                }
             }
-            if (result.stderr.isNotBlank()) {
-                logBuilder.append("Error: ").append(result.stderr).append(" | ")
-            }
-            if (result.stdout.isBlank() && result.stderr.isBlank()) {
-                logBuilder.append(if (result.isSuccess) "Applied" else "Failed").append(" | ")
-            }
+        } finally {
+            RoutineExecutionTracker.markFinished(routine.id)
         }
 
         val logOutput = logBuilder.toString().trimEnd(' ', '|')

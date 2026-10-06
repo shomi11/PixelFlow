@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
@@ -61,6 +62,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -122,6 +124,7 @@ fun DashboardScreen(
     onOpenOnboarding: () -> Unit = {}
 ) {
     val routines by viewModel.routines.collectAsState()
+    val runningRoutineIds by viewModel.runningRoutineIds.collectAsState()
     val logs by viewModel.logs.collectAsState()
     val shizukuState by viewModel.shizukuState.collectAsState()
     val shizukuVersion by viewModel.shizukuVersion.collectAsState()
