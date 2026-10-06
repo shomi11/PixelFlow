@@ -1,0 +1,6 @@
+{
+  "name": "Pixel Routines",
+  "description": "Native automated routines powered by Shizuku privileged shell controls, WorkManager, and Material 3 Expressive UI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

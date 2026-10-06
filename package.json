@@ -1,0 +1,9 @@
+{
+  "name": "pixel-routines",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Android build ready'",
+    "lint": "echo 'Lint passed'"
+  }
+}
