@@ -226,56 +226,113 @@ object ShizukuServiceHelper {
     }
 
     /**
-     * Robust execution method that runs shell operations using Shizuku.newProcess.
+     * Ensures Shizuku binder connectivity and authorization, waiting asynchronously
+     * if the app was recently un-frozen or started in the background.
+     */
+    suspend fun ensureAuthorized(timeoutMs: Long = 3000L): Boolean = withContext(Dispatchers.IO) {
+        if (checkPermission() && Shizuku.pingBinder()) {
+            _isBinderAlive.value = true
+            _state.value = ShizukuState.AUTHORIZED
+            return@withContext true
+        }
+
+        initialize()
+
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            checkBindingAndPermission()
+            if (Shizuku.pingBinder() && checkPermission()) {
+                Log.i(TAG, "Shizuku binder and permission confirmed ready after ${System.currentTimeMillis() - startTime}ms")
+                _isBinderAlive.value = true
+                _state.value = ShizukuState.AUTHORIZED
+                return@withContext true
+            }
+            kotlinx.coroutines.delay(100)
+        }
+        val finalStatus = Shizuku.pingBinder() && checkPermission()
+        Log.i(TAG, "Shizuku ensureAuthorized completed with status: $finalStatus")
+        return@withContext finalStatus
+    }
+
+    /**
+     * Robust execution method that runs shell operations using Shizuku.newProcess,
+     * with root shell fallback for rooted environments.
      *
      * @param command The privileged shell command to execute (e.g. "settings put secure doze_always_on 1")
      * @return ShellResult containing exitCode, stdout, stderr, executedCommand, and isSuccess.
      */
     suspend fun executeCommand(command: String): ShellResult = withContext(Dispatchers.IO) {
-        val isAuthorized = checkPermission() && Shizuku.pingBinder()
-
+        // 1. Fast check or wait up to 3s for Shizuku binder to connect in background
+        var isAuthorized = checkPermission() && Shizuku.pingBinder()
         if (!isAuthorized) {
-            Log.w(TAG, "Shizuku not authorized or binder inactive. Simulating: $command")
-            return@withContext ShellResult(
-                exitCode = 0,
-                stdout = "[Simulated output: Shizuku binder not active. In active ADB mode, this executes: $command]",
-                stderr = "",
-                executedCommand = command,
-                isSuccess = true
-            )
+            isAuthorized = ensureAuthorized(3000L)
         }
 
-        try {
-            Log.d(TAG, "Executing privileged command via Shizuku.newProcess: $command")
-            val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            ).apply { isAccessible = true }
+        if (isAuthorized) {
+            try {
+                Log.d(TAG, "Executing privileged command via Shizuku.newProcess: $command")
+                val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
+                    "newProcess",
+                    Array<String>::class.java,
+                    Array<String>::class.java,
+                    String::class.java
+                ).apply { isAccessible = true }
 
-            val process = newProcessMethod.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
+                val process = newProcessMethod.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
 
+                val stdout = process.inputStream.bufferedReader().use { it.readText() }.trim()
+                val stderr = process.errorStream.bufferedReader().use { it.readText() }.trim()
+                val exitCode = process.waitFor()
+
+                return@withContext ShellResult(
+                    exitCode = exitCode,
+                    stdout = stdout,
+                    stderr = stderr,
+                    executedCommand = command,
+                    isSuccess = exitCode == 0
+                )
+            } catch (e: Throwable) {
+                Log.e(TAG, "Exception while executing Shizuku command: $command", e)
+            }
+        }
+
+        // 2. Secondary fallback: check if root 'su' shell is available on device
+        val rootResult = executeViaRoot(command)
+        if (rootResult != null) {
+            return@withContext rootResult
+        }
+
+        // 3. Neither Shizuku nor Root was available to execute privileged shell command
+        Log.w(TAG, "Privileged execution unavailable for command: $command (Shizuku inactive/unauthorized, root unavailable)")
+        ShellResult(
+            exitCode = 1,
+            stdout = "",
+            stderr = "Privileged execution failed: Shizuku service is not running or authorized, and root is unavailable.",
+            executedCommand = command,
+            isSuccess = false
+        )
+    }
+
+    private fun executeViaRoot(command: String): ShellResult? {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
             val stdout = process.inputStream.bufferedReader().use { it.readText() }.trim()
             val stderr = process.errorStream.bufferedReader().use { it.readText() }.trim()
             val exitCode = process.waitFor()
-
-            ShellResult(
-                exitCode = exitCode,
-                stdout = stdout,
-                stderr = stderr,
-                executedCommand = command,
-                isSuccess = exitCode == 0
-            )
-        } catch (e: Throwable) {
-            Log.e(TAG, "Exception while executing Shizuku command: $command", e)
-            ShellResult(
-                exitCode = -1,
-                stdout = "",
-                stderr = e.localizedMessage ?: "Unknown shell execution error",
-                executedCommand = command,
-                isSuccess = false
-            )
+            if (exitCode == 0 || stdout.isNotBlank()) {
+                Log.i(TAG, "Executed command successfully via root 'su': $command")
+                ShellResult(
+                    exitCode = exitCode,
+                    stdout = stdout,
+                    stderr = stderr,
+                    executedCommand = "su -c $command",
+                    isSuccess = exitCode == 0
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 }

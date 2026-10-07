@@ -128,8 +128,8 @@ object RoutineNotificationManager {
             }
 
             val statusIconPrefix = if (isSuccess) "✓" else "⚠"
-            val title = "$statusIconPrefix Routine Executed: ${routine.title}"
-            val shortSummary = "${actions.size} action(s) applied • $status"
+            val title = if (isSuccess) "$statusIconPrefix Routine Executed: ${routine.title}" else "⚠ Routine Execution Failed: ${routine.title}"
+            val shortSummary = if (isSuccess) "${actions.size} action(s) applied • $status" else "Actions could not be applied • $status"
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)

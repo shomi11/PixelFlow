@@ -62,6 +62,15 @@ object ShizukuManager {
         return executeCommand(cmd)
     }
 
+    suspend fun setHotspot(enabled: Boolean): ShellResult {
+        val cmd = if (enabled) {
+            "cmd wifi start-softap || svc wifi startSoftAp || cmd connectivity start-tethering 0 || cmd tethering start-tethering 0"
+        } else {
+            "cmd wifi stop-softap || svc wifi stopSoftAp || cmd connectivity stop-tethering 0 || cmd tethering stop-tethering 0"
+        }
+        return executeCommand(cmd)
+    }
+
     suspend fun setBluetooth(enabled: Boolean): ShellResult {
         val cmd = "cmd bluetooth_manager ${if (enabled) "enable" else "disable"} || svc bluetooth ${if (enabled) "enable" else "disable"}"
         return executeCommand(cmd)

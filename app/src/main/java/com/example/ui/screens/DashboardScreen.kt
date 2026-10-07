@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -410,8 +411,10 @@ fun DashboardScreen(
                 }
             } else {
                 items(displayedRoutines, key = { it.id }) { routine ->
+                    val isExecuting = runningRoutineIds.contains(routine.id) || routine.lastExecutionStatus == "RUNNING"
                     RoutineCard(
                         routine = routine,
+                        isRunning = isExecuting,
                         onToggle = { viewModel.toggleRoutine(routine) },
                         onRunNow = { viewModel.executeRoutineNow(routine) },
                         onEdit = { onEditRoutineClick(routine.id) },
@@ -494,6 +497,7 @@ fun DashboardScreen(
 @Composable
 fun RoutineCard(
     routine: RoutineEntity,
+    isRunning: Boolean = false,
     onToggle: () -> Unit,
     onRunNow: () -> Unit,
     onEdit: () -> Unit,
@@ -509,17 +513,58 @@ fun RoutineCard(
     val triggerIcon = getTriggerIcon(routine.triggerType)
     val actions = remember(routine.actionsJson) { routine.parseActions() }
 
+    val isExecutingNow = isRunning || routine.lastExecutionStatus == "RUNNING"
+    val isInActiveSchedule = routine.isCurrentlyInActiveWindow()
+    val isCurrentlyRunning = isExecutingNow || isInActiveSchedule
+
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (isCurrentlyRunning) {
+                    Modifier.border(1.5.dp, Color(0xFF00897B), RoundedCornerShape(18.dp))
+                } else Modifier
+            )
             .clickable { onEdit() }
             .testTag("routine_card_${routine.id}"),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isCurrentlyRunning) Color(0xFF00897B).copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Currently Running prominent status label
+            if (isCurrentlyRunning) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF00897B).copy(alpha = 0.16f),
+                    border = BorderStroke(1.dp, Color(0xFF00897B).copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .testTag("currently_running_badge_${routine.id}")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Currently Running",
+                            tint = Color(0xFF00897B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isExecutingNow) "CURRENTLY RUNNING • Executing actions" else "CURRENTLY RUNNING • Active schedule",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00897B)
+                        )
+                    }
+                }
+            }
+
             // Header: Icon accent + Title + Switch
             Row(
                 modifier = Modifier.fillMaxWidth(),

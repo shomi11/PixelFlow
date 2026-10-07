@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -309,6 +310,9 @@ fun RoutineEditor(
     var wifiState by remember(initialRoutine) { mutableStateOf(true) }
     var wifiActive by remember(initialRoutine) { mutableStateOf(false) }
 
+    var hotspotState by remember(initialRoutine) { mutableStateOf(true) }
+    var hotspotActive by remember(initialRoutine) { mutableStateOf(false) }
+
     var bluetoothState by remember(initialRoutine) { mutableStateOf(true) }
     var bluetoothActive by remember(initialRoutine) { mutableStateOf(false) }
 
@@ -348,6 +352,10 @@ fun RoutineEditor(
                 ActionType.WIFI -> {
                     wifiActive = true
                     wifiState = action.enabledState
+                }
+                ActionType.HOTSPOT -> {
+                    hotspotActive = true
+                    hotspotState = action.enabledState
                 }
                 ActionType.BLUETOOTH -> {
                     bluetoothActive = true
@@ -440,6 +448,7 @@ fun RoutineEditor(
         if (autoRotateActive) list.add(RoutineActionItem(type = ActionType.AUTO_ROTATE, enabledState = autoRotateEnabled))
         if (darkModeActive) list.add(RoutineActionItem(type = ActionType.DARK_MODE, enabledState = darkModeEnabled))
         if (wifiActive) list.add(RoutineActionItem(type = ActionType.WIFI, enabledState = wifiState))
+        if (hotspotActive) list.add(RoutineActionItem(type = ActionType.HOTSPOT, enabledState = hotspotState))
         if (bluetoothActive) list.add(RoutineActionItem(type = ActionType.BLUETOOTH, enabledState = bluetoothState))
         if (batterySaverActive) list.add(RoutineActionItem(type = ActionType.BATTERY_SAVER, enabledState = batterySaverState))
         if (timeoutActive) list.add(RoutineActionItem(type = ActionType.SCREEN_TIMEOUT, intValue = timeoutMs))
@@ -464,6 +473,9 @@ fun RoutineEditor(
         }
         if (wifiActive) {
             commands.add("svc wifi ${if (wifiState) "enable" else "disable"}")
+        }
+        if (hotspotActive) {
+            commands.add(if (hotspotState) "cmd wifi start-softap || svc wifi startSoftAp" else "cmd wifi stop-softap || svc wifi stopSoftAp")
         }
         if (bluetoothActive) {
             commands.add("cmd bluetooth_manager ${if (bluetoothState) "enable" else "disable"} || svc bluetooth ${if (bluetoothState) "enable" else "disable"}")
@@ -2161,6 +2173,25 @@ fun RoutineEditor(
                     ) {
                         Text(if (wifiState) "Turn Wi-Fi On" else "Turn Wi-Fi Off")
                         Switch(checked = wifiState, onCheckedChange = { wifiState = it })
+                    }
+                }
+
+                // Action Item 5b: Wi-Fi Hotspot
+                val hotspotShellCmd = if (hotspotState) "cmd wifi start-softap || svc wifi startSoftAp" else "cmd wifi stop-softap || svc wifi stopSoftAp"
+                ActionSettingCard(
+                    title = "Wi-Fi Hotspot",
+                    shellCommand = hotspotShellCmd,
+                    icon = Icons.Default.WifiTethering,
+                    isActive = hotspotActive,
+                    onActiveChange = { hotspotActive = it }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (hotspotState) "Turn Hotspot On" else "Turn Hotspot Off")
+                        Switch(checked = hotspotState, onCheckedChange = { hotspotState = it })
                     }
                 }
 

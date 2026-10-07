@@ -156,8 +156,6 @@ class RoutineWorker(
         try {
             // Verify and maintain exact AlarmManager alarms for scheduled, sunrise, and sunset routines
             RoutineAlarmManager.rescheduleAllRoutines(appContext)
-            // Verify and maintain hardware geofence proximity alerts for active geolocation routines
-            GeofenceManager.registerAllGeofences(appContext)
         } catch (e: Exception) {
             Log.e(TAG, "Error performing background scheduler maintenance in RoutineWorker", e)
         }

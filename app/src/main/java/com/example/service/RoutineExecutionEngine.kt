@@ -54,6 +54,10 @@ class RoutineExecutionEngine(private val context: Context) {
         }
 
         val actions = routine.parseActions()
+        if (actions.any { it.type.requiresShizuku }) {
+            // Guarantee Shizuku binder is attached even when running from background receivers/alarms
+            com.example.shizuku.ShizukuServiceHelper.ensureAuthorized(timeoutMs = 2500L)
+        }
         val logBuilder = StringBuilder()
         val commandsExecuted = mutableListOf<String>()
         val stdoutList = mutableListOf<String>()
@@ -101,7 +105,7 @@ class RoutineExecutionEngine(private val context: Context) {
 
         val logOutput = logBuilder.toString().trimEnd(' ', '|')
         val statusStr = if (overallSuccess) {
-            if (ShizukuManager.isAuthorized()) "SUCCESS" else "SIMULATED"
+            "SUCCESS"
         } else {
             "FAILED"
         }
@@ -171,6 +175,9 @@ class RoutineExecutionEngine(private val context: Context) {
             }
             ActionType.WIFI -> {
                 ShizukuManager.setWifi(action.enabledState)
+            }
+            ActionType.HOTSPOT -> {
+                ShizukuManager.setHotspot(action.enabledState)
             }
             ActionType.BLUETOOTH -> {
                 ShizukuManager.setBluetooth(action.enabledState)

@@ -22,6 +22,7 @@ class GeofenceTriggerReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "GeofenceTriggerReceiver"
+        private const val PREFS_NAME = "geofence_trigger_state_prefs"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -37,7 +38,7 @@ class GeofenceTriggerReceiver : BroadcastReceiver() {
             return
         }
 
-        Log.i(TAG, "Geofence transition received: routineId=$routineId, isEntering=$isEntering, expected=$expectedTransition")
+        Log.i(TAG, "Geofence transition intent: routineId=$routineId, isEntering=$isEntering, expected=$expectedTransition")
 
         // Acquire WakeLock to keep CPU active during execution
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -63,37 +64,57 @@ class GeofenceTriggerReceiver : BroadcastReceiver() {
                     val requiredTransition = config.optString("transition", "ENTER").uppercase()
                     val label = config.optString("label", "Selected Area")
 
-                    val matchesTransition = if (requiredTransition == "ENTER") isEntering else !isEntering
+                    // Double check current GPS distance for maximum precision
+                    val currentLocation = LocationHelper.getLastKnownLocation(context)
+                    val currentDistance = GeofenceManager.computeDistanceMeters(
+                        currentLocation.latitude,
+                        currentLocation.longitude,
+                        targetLat,
+                        targetLng
+                    )
 
-                    if (matchesTransition) {
-                        // Double check current GPS distance for maximum precision
-                        val currentLocation = LocationHelper.getLastKnownLocation(context)
-                        val currentDistance = GeofenceManager.computeDistanceMeters(
-                            currentLocation.latitude,
-                            currentLocation.longitude,
-                            targetLat,
-                            targetLng
-                        )
+                    val isInsideCurrent = currentDistance <= (radius * 1.25f)
+                    val currentState = if (isInsideCurrent) "INSIDE" else "OUTSIDE"
 
-                        val isDistanceConsistent = if (requiredTransition == "ENTER") {
-                            currentDistance <= (radius * 1.5f) // allow reasonable GPS tolerance
+                    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val lastStateKey = "geofence_state_$routineId"
+                    val lastTriggeredKey = "geofence_last_trigger_$routineId"
+                    val lastState = prefs.getString(lastStateKey, null)
+
+                    // On initial registration or app setup, record initial state without triggering
+                    if (lastState == null) {
+                        prefs.edit().putString(lastStateKey, currentState).apply()
+                        Log.i(TAG, "Geofence initialized initial state for routine $routineId as $currentState (no false trigger)")
+                        return@launch
+                    }
+
+                    // Determine if a genuine boundary crossing occurred
+                    val transitionedToInside = (lastState == "OUTSIDE" && currentState == "INSIDE")
+                    val transitionedToOutside = (lastState == "INSIDE" && currentState == "OUTSIDE")
+
+                    prefs.edit().putString(lastStateKey, currentState).apply()
+
+                    val shouldTrigger = if (requiredTransition == "ENTER") {
+                        transitionedToInside
+                    } else {
+                        transitionedToOutside
+                    }
+
+                    if (shouldTrigger) {
+                        val tenMinutesAgo = System.currentTimeMillis() - (10 * 60 * 1000L)
+                        val lastTriggered = prefs.getLong(lastTriggeredKey, 0L)
+
+                        if (lastTriggered < tenMinutesAgo && routine.lastExecutedTimestamp < tenMinutesAgo) {
+                            prefs.edit().putLong(lastTriggeredKey, System.currentTimeMillis()).apply()
+                            val triggerReason = "Geolocation: ${if (currentState == "INSIDE") "Arrived at" else "Departed from"} \"$label\" (${currentDistance.toInt()}m away)"
+                            val engine = RoutineExecutionEngine(context)
+                            val success = engine.executeRoutine(routine, triggerReason)
+                            Log.i(TAG, "Geofence routine \"${routine.name}\" executed successfully: $success")
                         } else {
-                            currentDistance >= (radius * 0.8f)
+                            Log.i(TAG, "Geofence routine \"${routine.name}\" suppressed due to debounce window")
                         }
-
-                        if (isDistanceConsistent) {
-                            val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000L)
-                            if (routine.lastExecutedTimestamp < fiveMinutesAgo) {
-                                val triggerReason = "Geolocation: ${if (isEntering) "Arrived at" else "Departed from"} \"$label\" (${currentDistance.toInt()}m away)"
-                                val engine = RoutineExecutionEngine(context)
-                                val success = engine.executeRoutine(routine, triggerReason)
-                                Log.i(TAG, "Geofence routine \"${routine.name}\" executed, success=$success")
-                            } else {
-                                Log.i(TAG, "Geofence routine \"${routine.name}\" skipped due to recent execution debounce")
-                            }
-                        } else {
-                            Log.w(TAG, "Geofence distance check failed: actual ${currentDistance}m vs radius ${radius}m")
-                        }
+                    } else {
+                        Log.d(TAG, "Geofence state stable ($lastState -> $currentState, required: $requiredTransition), skipping.")
                     }
                 } else {
                     Log.w(TAG, "Routine $routineId not found or disabled. Removing geofence.")

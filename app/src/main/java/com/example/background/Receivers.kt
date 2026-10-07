@@ -39,7 +39,14 @@ class BatteryTriggerReceiver : BroadcastReceiver() {
 
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val batteryPct = if (level != -1 && scale != -1) (level * 100 / scale.toFloat()).toInt() else -1
+        val batteryPct = if (level != -1 && scale != -1) {
+            (level * 100 / scale.toFloat()).toInt()
+        } else {
+            val batteryStatus = context.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            val bLevel = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val bScale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            if (bLevel != -1 && bScale != -1) (bLevel * 100 / bScale.toFloat()).toInt() else -1
+        }
 
         val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
 
@@ -72,14 +79,19 @@ class BatteryTriggerReceiver : BroadcastReceiver() {
                         // Battery level trigger: only trigger on transition below target level
                         val oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000L)
                         val lastTriggeredTime = prefs.getLong(lastTriggeredKey, 0L)
+                        val wasLowKey = "battery_was_low_${routine.id}"
+                        val wasLow = prefs.getBoolean(wasLowKey, false)
 
-                        val isBelowThreshold = batteryPct in 1..targetLevel || isBatteryLow
-                        if (isBelowThreshold && !isPowerConnected && lastTriggeredTime < oneHourAgo) {
-                            prefs.edit().putLong(lastTriggeredKey, System.currentTimeMillis()).apply()
+                        val isBelowThreshold = batteryPct in 1..targetLevel
+                        if (isBelowThreshold && !isPowerConnected && !wasLow && lastTriggeredTime < oneHourAgo) {
+                            prefs.edit()
+                                .putBoolean(wasLowKey, true)
+                                .putLong(lastTriggeredKey, System.currentTimeMillis())
+                                .apply()
                             engine.executeRoutine(routine, "Battery Low ($batteryPct%)")
                         } else if (batteryPct > targetLevel + 5) {
                             // Reset threshold trigger when battery charges back above target + 5%
-                            prefs.edit().putLong(lastTriggeredKey, 0L).apply()
+                            prefs.edit().putBoolean(wasLowKey, false).putLong(lastTriggeredKey, 0L).apply()
                         }
                     }
                 }

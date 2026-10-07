@@ -30,6 +30,7 @@ enum class ActionType(val displayName: String, val category: String, val require
     DARK_MODE("Dark Theme", "Display", true),
     SOUND_PROFILE("Sound Profile", "Audio", false),
     WIFI("Wi-Fi Power", "Connectivity", true),
+    HOTSPOT("Wi-Fi Hotspot", "Connectivity", true),
     BLUETOOTH("Bluetooth Power", "Connectivity", true),
     BATTERY_SAVER("Battery Saver", "Power", true),
     SCREEN_TIMEOUT("Screen Timeout", "Display", true)
@@ -94,6 +95,7 @@ data class RoutineActionItem(
                 }
             }
             ActionType.WIFI -> if (enabledState) "Wi-Fi: On" else "Wi-Fi: Off"
+            ActionType.HOTSPOT -> if (enabledState) "Hotspot: On" else "Hotspot: Off"
             ActionType.BLUETOOTH -> if (enabledState) "Bluetooth: On" else "Bluetooth: Off"
             ActionType.BATTERY_SAVER -> if (enabledState) "Battery Saver: On" else "Battery Saver: Off"
             ActionType.SCREEN_TIMEOUT -> "Timeout: ${intValue / 1000}s"
