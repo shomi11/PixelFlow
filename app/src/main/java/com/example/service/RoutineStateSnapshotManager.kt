@@ -146,8 +146,11 @@ object RoutineStateSnapshotManager {
                         val currentTimeout = queryCurrentScreenTimeout(appContext)
                         RoutineActionItem(type = ActionType.SCREEN_TIMEOUT, intValue = currentTimeout)
                     }
+                    ActionType.CUSTOM_NOTIFICATION -> null
                 }
-                snapshot.add(preActionItem)
+                if (preActionItem != null) {
+                    snapshot.add(preActionItem)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed capturing state for ${action.type}", e)
             }

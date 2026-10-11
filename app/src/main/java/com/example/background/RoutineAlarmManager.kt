@@ -8,6 +8,8 @@ import android.os.Build
 import android.util.Log
 import com.example.MainActivity
 import com.example.data.local.AppDatabase
+import com.example.data.model.ActionType
+import com.example.data.model.CustomNotificationConfig
 import com.example.data.model.Routine
 import com.example.data.model.TriggerType
 import com.example.util.LocationHelper
@@ -32,8 +34,14 @@ object RoutineAlarmManager {
     const val ACTION_TRIGGER_ROUTINE_ALARM = "com.example.ACTION_TRIGGER_ROUTINE_ALARM"
     const val ACTION_RESTORE_ROUTINE = "com.example.ACTION_RESTORE_ROUTINE"
     const val ACTION_END_ROUTINE_ALARM = "com.example.ACTION_END_ROUTINE_ALARM"
+    const val ACTION_TRIGGER_CUSTOM_NOTIFICATION = "com.example.ACTION_TRIGGER_CUSTOM_NOTIFICATION"
     const val EXTRA_ROUTINE_ID = "extra_routine_id"
     const val EXTRA_IS_TEST = "extra_is_test"
+    const val EXTRA_NOTIF_TITLE = "extra_notif_title"
+    const val EXTRA_NOTIF_MESSAGE = "extra_notif_message"
+    const val EXTRA_NOTIF_ICON = "extra_notif_icon"
+    const val EXTRA_NOTIF_SCHEDULE_TYPE = "extra_notif_schedule_type"
+    const val EXTRA_NOTIF_TIME = "extra_notif_time"
 
     /**
      * Checks if exact alarm scheduling is permitted by the system.
@@ -253,12 +261,130 @@ object RoutineAlarmManager {
                         routine.triggerType == TriggerType.SUNSET) {
                         scheduleExactRoutineAlarm(context, routine)
                     }
+                    scheduleRoutineCustomNotifications(context, routine)
                 }
-                Log.i(TAG, "Rescheduled all active time & solar routines (${activeRoutines.size} evaluated)")
+                Log.i(TAG, "Rescheduled all active time & solar routines and custom notifications (${activeRoutines.size} evaluated)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error rescheduling all routines", e)
             }
         }
+    }
+
+    fun scheduleCustomNotificationAlarm(
+        context: Context,
+        routineId: Long,
+        title: String,
+        message: String,
+        iconName: String,
+        scheduleType: String,
+        time: String
+    ) {
+        val targetMillis = calculateNextDailyTimeMillis(time)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+
+        val intent = Intent(context, RoutineAlarmReceiver::class.java).apply {
+            action = ACTION_TRIGGER_CUSTOM_NOTIFICATION
+            putExtra(EXTRA_ROUTINE_ID, routineId)
+            putExtra(EXTRA_NOTIF_TITLE, title)
+            putExtra(EXTRA_NOTIF_MESSAGE, message)
+            putExtra(EXTRA_NOTIF_ICON, iconName)
+            putExtra(EXTRA_NOTIF_SCHEDULE_TYPE, scheduleType)
+            putExtra(EXTRA_NOTIF_TIME, time)
+        }
+
+        val requestCode = 300000 + (routineId.coerceAtLeast(1L) % 50000).toInt()
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val showIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val showPendingIntent = PendingIntent.getActivity(
+            context,
+            requestCode + 10000,
+            showIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(targetMillis, showPendingIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            Log.i(TAG, "Scheduled Custom Notification alarm for '$title' at $time ($scheduleType, millis=$targetMillis)")
+        } catch (e: Exception) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent)
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "Failed scheduling custom notification alarm", ex)
+            }
+        }
+    }
+
+    fun cancelCustomNotificationAlarm(context: Context, routineId: Long) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = Intent(context, RoutineAlarmReceiver::class.java).apply {
+            action = ACTION_TRIGGER_CUSTOM_NOTIFICATION
+            putExtra(EXTRA_ROUTINE_ID, routineId)
+        }
+        val requestCode = 300000 + (routineId.coerceAtLeast(1L) % 50000).toInt()
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    fun scheduleRoutineCustomNotifications(context: Context, routine: Routine) {
+        if (!routine.isEnabled) {
+            cancelCustomNotificationAlarm(context, routine.id)
+            return
+        }
+        val actions = routine.actions.ifEmpty { routine.parseActions() }
+        for (action in actions) {
+            if (action.type == ActionType.CUSTOM_NOTIFICATION && action.enabledState) {
+                val cfg = CustomNotificationConfig.fromJsonString(action.stringValue)
+                if (cfg.scheduleType == "ONCE" || cfg.scheduleType == "DAILY") {
+                    scheduleCustomNotificationAlarm(
+                        context = context,
+                        routineId = routine.id,
+                        title = cfg.title,
+                        message = cfg.message,
+                        iconName = cfg.iconName,
+                        scheduleType = cfg.scheduleType,
+                        time = cfg.time
+                    )
+                }
+            }
+        }
+    }
+
+    fun calculateNextDailyTimeMillis(timeStr: String): Long {
+        val parts = timeStr.split(":")
+        val hour = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: 9
+        val minute = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 0
+
+        val now = Calendar.getInstance()
+        val target = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        if (target.timeInMillis <= now.timeInMillis) {
+            target.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return target.timeInMillis
     }
 
     private fun createAlarmPendingIntent(context: Context, routineId: Long): PendingIntent {

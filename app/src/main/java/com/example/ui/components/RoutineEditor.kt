@@ -36,15 +36,20 @@ import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -54,6 +59,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
@@ -64,6 +70,7 @@ import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.VolumeMute
@@ -125,6 +132,7 @@ import androidx.compose.ui.unit.sp
 import com.example.background.GeofenceManager
 import com.example.background.RoutineAlarmManager
 import com.example.data.model.ActionType
+import com.example.data.model.CustomNotificationConfig
 import com.example.data.model.Routine
 import com.example.data.model.RoutineActionItem
 import com.example.data.model.RoutineTrigger
@@ -400,6 +408,14 @@ fun RoutineEditor(
     var soundVolumePercent by remember(initialRoutine) { mutableIntStateOf(70) }
     var soundVolumeEnabled by remember(initialRoutine) { mutableStateOf(true) }
 
+    // Custom Notification action state
+    var customNotificationActive by remember(initialRoutine) { mutableStateOf(false) }
+    var customNotificationTitle by remember(initialRoutine) { mutableStateOf("Routine Alert") }
+    var customNotificationMessage by remember(initialRoutine) { mutableStateOf("") }
+    var customNotificationIcon by remember(initialRoutine) { mutableStateOf("bell") }
+    var customNotificationScheduleType by remember(initialRoutine) { mutableStateOf("IMMEDIATE") } // "IMMEDIATE", "ONCE", "DAILY"
+    var customNotificationTime by remember(initialRoutine) { mutableStateOf("09:00") }
+
     // Custom user-defined shell command actions
     val customShellCommands = remember { mutableStateListOf<String>() }
     var newCustomCommand by remember { mutableStateOf("") }
@@ -452,6 +468,15 @@ fun RoutineEditor(
                     } else if (action.intValue == -1) {
                         soundVolumeEnabled = false
                     }
+                }
+                ActionType.CUSTOM_NOTIFICATION -> {
+                    customNotificationActive = true
+                    val cfg = CustomNotificationConfig.fromJsonString(action.stringValue)
+                    customNotificationTitle = cfg.title
+                    customNotificationMessage = cfg.message
+                    customNotificationIcon = cfg.iconName
+                    customNotificationScheduleType = cfg.scheduleType
+                    customNotificationTime = cfg.time
                 }
             }
         }
@@ -533,6 +558,23 @@ fun RoutineEditor(
             val vol = if (soundProfile == "SILENT") 0 else if (soundVolumeEnabled) soundVolumePercent else -1
             list.add(RoutineActionItem(type = ActionType.SOUND_PROFILE, stringValue = soundProfile, intValue = vol))
         }
+        if (customNotificationActive) {
+            val cfg = CustomNotificationConfig(
+                title = customNotificationTitle.ifBlank { "Routine Alert" },
+                message = customNotificationMessage,
+                iconName = customNotificationIcon,
+                scheduleType = customNotificationScheduleType,
+                time = customNotificationTime
+            )
+            list.add(
+                RoutineActionItem(
+                    type = ActionType.CUSTOM_NOTIFICATION,
+                    enabledState = true,
+                    intValue = 0,
+                    stringValue = cfg.toJsonString()
+                )
+            )
+        }
         return list
     }
 
@@ -580,6 +622,14 @@ fun RoutineEditor(
                     commands.add("settings put global mode_ringer 2")
                 }
             }
+        }
+        if (customNotificationActive) {
+            val timing = when (customNotificationScheduleType) {
+                "DAILY" -> "daily at $customNotificationTime"
+                "ONCE" -> "once at $customNotificationTime"
+                else -> "immediate on routine trigger"
+            }
+            commands.add("echo 'Notify: \"${customNotificationTitle.ifBlank { "Routine Alert" }}\" ($timing)'")
         }
         commands.addAll(customShellCommands)
         return commands
@@ -3627,6 +3677,486 @@ fun RoutineEditor(
                                                 modifier = Modifier.weight(1f)
                                             )
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Action Item 9: Custom Scheduled Notification
+                val notifTimingDesc = when (customNotificationScheduleType) {
+                    "DAILY" -> "Every day at $customNotificationTime"
+                    "ONCE" -> "Once at $customNotificationTime"
+                    else -> "Immediate on routine activation"
+                }
+                val notifShellCmd = "notify --title \"${customNotificationTitle.ifBlank { "Routine Alert" }}\" --icon $customNotificationIcon --schedule $customNotificationScheduleType"
+
+                val notifIconVector = when (customNotificationIcon) {
+                    "star" -> Icons.Default.Star
+                    "heart" -> Icons.Default.Favorite
+                    "bolt" -> Icons.Default.Bolt
+                    "check" -> Icons.Default.CheckCircle
+                    "coffee" -> Icons.Default.Coffee
+                    "fitness" -> Icons.Default.FitnessCenter
+                    "calendar" -> Icons.Default.CalendarToday
+                    "alert" -> Icons.Default.Warning
+                    "info" -> Icons.Default.Info
+                    else -> Icons.Default.Notifications
+                }
+
+                ActionSettingCard(
+                    title = "Custom Notification",
+                    shellCommand = notifShellCmd,
+                    icon = notifIconVector,
+                    isActive = customNotificationActive,
+                    onActiveChange = {
+                        haptics.toggleAction(it)
+                        customNotificationActive = it
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Title Input
+                        OutlinedTextField(
+                            value = customNotificationTitle,
+                            onValueChange = { customNotificationTitle = it },
+                            label = { Text("Notification Title") },
+                            placeholder = { Text("e.g. Focus time, Hydrate, Stand up, Bedtime") },
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = notifIconVector,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF2563EB),
+                                focusedLabelColor = Color(0xFF2563EB),
+                                focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("custom_notif_title_input")
+                        )
+
+                        // Message / Text Input
+                        OutlinedTextField(
+                            value = customNotificationMessage,
+                            onValueChange = { customNotificationMessage = it },
+                            label = { Text("Message / Description (Optional)") },
+                            placeholder = { Text("e.g. Remember to stretch and stay hydrated") },
+                            minLines = 2,
+                            maxLines = 3,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF2563EB),
+                                focusedLabelColor = Color(0xFF2563EB),
+                                focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("custom_notif_message_input")
+                        )
+
+                        // Icon Selector
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Choose Notification Icon",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            val iconOptions = listOf(
+                                "bell" to ("Bell" to Icons.Default.Notifications),
+                                "star" to ("Star" to Icons.Default.Star),
+                                "heart" to ("Heart" to Icons.Default.Favorite),
+                                "bolt" to ("Energy" to Icons.Default.Bolt),
+                                "check" to ("Task" to Icons.Default.CheckCircle),
+                                "coffee" to ("Coffee" to Icons.Default.Coffee),
+                                "fitness" to ("Fitness" to Icons.Default.FitnessCenter),
+                                "calendar" to ("Calendar" to Icons.Default.CalendarToday),
+                                "alert" to ("Alert" to Icons.Default.Warning),
+                                "info" to ("Info" to Icons.Default.Info)
+                            )
+
+                            // Row 1 of icons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                iconOptions.take(5).forEach { (iconKey, pair) ->
+                                    val (label, iconVec) = pair
+                                    val isSelected = customNotificationIcon == iconKey
+                                    Surface(
+                                        onClick = {
+                                            haptics.selectionTick()
+                                            customNotificationIcon = iconKey
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                        border = BorderStroke(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("notif_icon_$iconKey")
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = iconVec,
+                                                contentDescription = label,
+                                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Text(
+                                                text = label,
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Row 2 of icons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                iconOptions.drop(5).take(5).forEach { (iconKey, pair) ->
+                                    val (label, iconVec) = pair
+                                    val isSelected = customNotificationIcon == iconKey
+                                    Surface(
+                                        onClick = {
+                                            haptics.selectionTick()
+                                            customNotificationIcon = iconKey
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                        border = BorderStroke(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("notif_icon_$iconKey")
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(vertical = 8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = iconVec,
+                                                contentDescription = label,
+                                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Text(
+                                                text = label,
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Schedule Type Selection: Immediate, Once, Daily
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Delivery Timing",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    "IMMEDIATE" to "On Run",
+                                    "ONCE" to "Just Once",
+                                    "DAILY" to "Every Day"
+                                ).forEach { (typeKey, label) ->
+                                    val isSelected = customNotificationScheduleType == typeKey
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            haptics.selectionTick()
+                                            customNotificationScheduleType = typeKey
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = when (typeKey) {
+                                                    "DAILY" -> Icons.Default.Repeat
+                                                    "ONCE" -> Icons.Default.Schedule
+                                                    else -> Icons.Default.PlayArrow
+                                                },
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = label,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                            )
+                                        },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
+                                            selectedLabelColor = Color(0xFF1D4ED8),
+                                            selectedLeadingIconColor = Color(0xFF2563EB),
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
+                                        border = FilterChipDefaults.filterChipBorder(
+                                            enabled = true,
+                                            selected = isSelected,
+                                            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                            selectedBorderColor = Color(0xFF2563EB),
+                                            borderWidth = 1.dp,
+                                            selectedBorderWidth = 1.5.dp
+                                        ),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("notif_sched_${typeKey.lowercase()}")
+                                    )
+                                }
+                            }
+                        }
+
+                        // Time Selection (shown when ONCE or DAILY)
+                        if (customNotificationScheduleType == "ONCE" || customNotificationScheduleType == "DAILY") {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.AccessTime,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = if (customNotificationScheduleType == "DAILY") "Every Day At Time" else "Trigger Once At Time",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = customNotificationTime,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Quick Presets
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        listOf("07:00", "09:00", "12:00", "18:00", "21:00").forEach { presetTime ->
+                                            val isTimeSelected = customNotificationTime == presetTime
+                                            FilterChip(
+                                                selected = isTimeSelected,
+                                                onClick = {
+                                                    haptics.selectionTick()
+                                                    customNotificationTime = presetTime
+                                                },
+                                                label = {
+                                                    Text(
+                                                        text = presetTime,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (isTimeSelected) FontWeight.Bold else FontWeight.Normal
+                                                    )
+                                                },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+
+                                    // Stepper controls for Hour and Minute
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Adjust Hours & Minutes:",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            val parts = customNotificationTime.split(":")
+                                            val curHour = parts.getOrNull(0)?.toIntOrNull() ?: 9
+                                            val curMin = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    haptics.buttonClick()
+                                                    val newHour = (curHour - 1 + 24) % 24
+                                                    customNotificationTime = String.format("%02d:%02d", newHour, curMin)
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text("-1h", fontSize = 11.sp)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    haptics.buttonClick()
+                                                    val newHour = (curHour + 1) % 24
+                                                    customNotificationTime = String.format("%02d:%02d", newHour, curMin)
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text("+1h", fontSize = 11.sp)
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    haptics.buttonClick()
+                                                    val newMin = (curMin + 15) % 60
+                                                    customNotificationTime = String.format("%02d:%02d", curHour, newMin)
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.height(32.dp)
+                                            ) {
+                                                Text("+15m", fontSize = 11.sp)
+                                            }
+                                        }
+                                    }
+
+                                    // Schedule Summary Text
+                                    Text(
+                                        text = if (customNotificationScheduleType == "DAILY")
+                                            "✓ Notification will trigger every day at $customNotificationTime"
+                                        else
+                                            "✓ Notification will trigger once at $customNotificationTime",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        // Preview of Notification Banner
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = notifIconVector,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Pixel Routines",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = if (customNotificationScheduleType == "IMMEDIATE") "Now" else customNotificationTime,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                    Text(
+                                        text = customNotificationTitle.ifBlank { "Routine Alert" },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (customNotificationMessage.isNotBlank()) {
+                                        Text(
+                                            text = customNotificationMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
                                 }
                             }

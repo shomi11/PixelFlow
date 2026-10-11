@@ -6,8 +6,10 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import android.util.Log
+import com.example.background.RoutineAlarmManager
 import com.example.data.local.AppDatabase
 import com.example.data.model.ActionType
+import com.example.data.model.CustomNotificationConfig
 import com.example.data.model.RoutineActionItem
 import com.example.data.model.RoutineEntity
 import com.example.data.model.RoutineExecutionLog
@@ -349,6 +351,56 @@ class RoutineExecutionEngine(private val context: Context) {
                 }
                 ShizukuManager.setScreenTimeout(timeoutMs)
             }
+            ActionType.CUSTOM_NOTIFICATION -> {
+                executeCustomNotification(action)
+            }
+        }
+    }
+
+    private fun executeCustomNotification(action: RoutineActionItem): ShellResult {
+        return try {
+            val cfg = CustomNotificationConfig.fromJsonString(action.stringValue)
+            if (cfg.scheduleType == "IMMEDIATE" || cfg.scheduleType.isBlank()) {
+                RoutineNotificationManager.postCustomNotification(
+                    context = appContext,
+                    title = cfg.title,
+                    message = cfg.message,
+                    iconName = cfg.iconName
+                )
+                ShellResult(
+                    exitCode = 0,
+                    stdout = "Custom notification '${cfg.title}' posted immediately",
+                    stderr = "",
+                    executedCommand = "post_custom_notification",
+                    isSuccess = true
+                )
+            } else {
+                RoutineAlarmManager.scheduleCustomNotificationAlarm(
+                    context = appContext,
+                    routineId = 0L,
+                    title = cfg.title,
+                    message = cfg.message,
+                    iconName = cfg.iconName,
+                    scheduleType = cfg.scheduleType,
+                    time = cfg.time
+                )
+                ShellResult(
+                    exitCode = 0,
+                    stdout = "Custom notification '${cfg.title}' scheduled for ${cfg.time} (${cfg.scheduleType})",
+                    stderr = "",
+                    executedCommand = "schedule_custom_notification",
+                    isSuccess = true
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed executing custom notification action", e)
+            ShellResult(
+                exitCode = 1,
+                stdout = "",
+                stderr = "Error: ${e.message}",
+                executedCommand = "post_custom_notification",
+                isSuccess = false
+            )
         }
     }
 

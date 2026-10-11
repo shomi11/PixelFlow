@@ -203,9 +203,11 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                     } else if (it.triggerType == TriggerType.LOCATION) {
                         com.example.background.GeofenceManager.registerGeofence(getApplication(), it.copy(isEnabled = true))
                     }
+                    RoutineAlarmManager.scheduleRoutineCustomNotifications(getApplication(), it.copy(isEnabled = true))
                 }
             } else {
                 RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
+                RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routineId)
                 com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             }
             _userMessage.emit("Routine ${if (isEnabled) "enabled" else "disabled"}")
@@ -232,6 +234,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun deleteRoutine(routine: Routine) {
         viewModelScope.launch {
             RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
+            RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routine.id)
             com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
             repository.deleteRoutine(routine)
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
@@ -242,6 +245,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun deleteRoutine(routineId: Long) {
         viewModelScope.launch {
             RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
+            RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routineId)
             com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             repository.deleteRoutineById(routineId)
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
@@ -269,6 +273,9 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 } else if (savedRoutine.triggerType == TriggerType.LOCATION) {
                     com.example.background.GeofenceManager.registerGeofence(getApplication(), savedRoutine)
                 }
+                RoutineAlarmManager.scheduleRoutineCustomNotifications(getApplication(), savedRoutine)
+            } else {
+                RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), savedRoutine.id)
             }
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             onComplete()

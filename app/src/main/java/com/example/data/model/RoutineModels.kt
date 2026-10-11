@@ -33,7 +33,50 @@ enum class ActionType(val displayName: String, val category: String, val require
     HOTSPOT("Wi-Fi Hotspot", "Connectivity", true),
     BLUETOOTH("Bluetooth Power", "Connectivity", true),
     BATTERY_SAVER("Battery Saver", "Power", true),
-    SCREEN_TIMEOUT("Screen Timeout", "Display", true)
+    SCREEN_TIMEOUT("Screen Timeout", "Display", true),
+    CUSTOM_NOTIFICATION("Custom Notification", "Notification", false)
+}
+
+/**
+ * Configuration payload for Custom Notification actions.
+ */
+data class CustomNotificationConfig(
+    val title: String = "Reminder",
+    val message: String = "",
+    val iconName: String = "bell",
+    val scheduleType: String = "IMMEDIATE", // "IMMEDIATE", "ONCE", "DAILY"
+    val time: String = "09:00"
+) {
+    fun toJsonString(): String {
+        return JSONObject().apply {
+            put("title", title)
+            put("message", message)
+            put("iconName", iconName)
+            put("scheduleType", scheduleType)
+            put("time", time)
+        }.toString()
+    }
+
+    companion object {
+        fun fromJsonString(jsonStr: String): CustomNotificationConfig {
+            return try {
+                if (jsonStr.isBlank() || !jsonStr.trim().startsWith("{")) {
+                    CustomNotificationConfig(title = jsonStr.ifBlank { "Reminder" })
+                } else {
+                    val json = JSONObject(jsonStr)
+                    CustomNotificationConfig(
+                        title = json.optString("title", "Reminder"),
+                        message = json.optString("message", ""),
+                        iconName = json.optString("iconName", "bell"),
+                        scheduleType = json.optString("scheduleType", "IMMEDIATE"),
+                        time = json.optString("time", "09:00")
+                    )
+                }
+            } catch (e: Exception) {
+                CustomNotificationConfig(title = jsonStr.ifBlank { "Reminder" })
+            }
+        }
+    }
 }
 
 /**
@@ -99,6 +142,15 @@ data class RoutineActionItem(
             ActionType.BLUETOOTH -> if (enabledState) "Bluetooth: On" else "Bluetooth: Off"
             ActionType.BATTERY_SAVER -> if (enabledState) "Battery Saver: On" else "Battery Saver: Off"
             ActionType.SCREEN_TIMEOUT -> "Timeout: ${intValue / 1000}s"
+            ActionType.CUSTOM_NOTIFICATION -> {
+                val cfg = CustomNotificationConfig.fromJsonString(stringValue)
+                val timingStr = when (cfg.scheduleType) {
+                    "DAILY" -> "Daily at ${cfg.time}"
+                    "ONCE" -> "Once at ${cfg.time}"
+                    else -> "When active"
+                }
+                "Notify: \"${cfg.title}\" ($timingStr)"
+            }
         }
     }
 

@@ -24,6 +24,47 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
+        if (action == RoutineAlarmManager.ACTION_TRIGGER_CUSTOM_NOTIFICATION) {
+            val pendingResult = goAsync()
+            val appContext = context.applicationContext
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val routineId = intent.getLongExtra(RoutineAlarmManager.EXTRA_ROUTINE_ID, -1L)
+                    val title = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_TITLE) ?: "Reminder"
+                    val message = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_MESSAGE) ?: ""
+                    val iconName = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_ICON) ?: "bell"
+                    val scheduleType = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_SCHEDULE_TYPE) ?: "ONCE"
+                    val time = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_TIME) ?: "09:00"
+
+                    Log.i(TAG, "Custom notification alarm fired: title='$title', scheduleType='$scheduleType', time='$time'")
+                    com.example.notification.RoutineNotificationManager.postCustomNotification(
+                        context = appContext,
+                        title = title,
+                        message = message,
+                        iconName = iconName
+                    )
+
+                    // If daily, reschedule for tomorrow
+                    if (scheduleType.equals("DAILY", ignoreCase = true)) {
+                        RoutineAlarmManager.scheduleCustomNotificationAlarm(
+                            context = appContext,
+                            routineId = routineId,
+                            title = title,
+                            message = message,
+                            iconName = iconName,
+                            scheduleType = scheduleType,
+                            time = time
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling custom notification alarm", e)
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+            return
+        }
+
         if (action != RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM &&
             action != RoutineAlarmManager.ACTION_RESTORE_ROUTINE &&
             action != RoutineAlarmManager.ACTION_END_ROUTINE_ALARM) return

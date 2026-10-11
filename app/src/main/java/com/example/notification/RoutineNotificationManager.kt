@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
+import com.example.R
 import com.example.data.model.RoutineActionItem
 import com.example.data.model.RoutineEntity
 import java.text.SimpleDateFormat
@@ -286,6 +287,84 @@ object RoutineNotificationManager {
             NotificationManagerCompat.from(context).notify(9999, notification)
         } catch (e: Exception) {
             Log.e(TAG, "Error posting test notification", e)
+        }
+    }
+
+    /**
+     * Resolves the small icon drawable resource for custom notifications based on icon name.
+     */
+    fun getSmallIconResource(iconName: String): Int {
+        return when (iconName.lowercase()) {
+            "bell" -> R.drawable.ic_notif_bell
+            "star" -> R.drawable.ic_notif_star
+            "heart" -> R.drawable.ic_notif_heart
+            "bolt" -> R.drawable.ic_notif_bolt
+            "check" -> R.drawable.ic_notif_check
+            "coffee" -> R.drawable.ic_notif_coffee
+            "fitness" -> R.drawable.ic_notif_fitness
+            "calendar" -> R.drawable.ic_notif_calendar
+            "info" -> R.drawable.ic_notif_info
+            "alert" -> R.drawable.ic_notif_alert
+            else -> R.drawable.ic_notif_bell
+        }
+    }
+
+    /**
+     * Posts a custom notification specified by the user in routine actions.
+     */
+    fun postCustomNotification(
+        context: Context,
+        title: String,
+        message: String,
+        iconName: String,
+        notificationId: Int = (System.currentTimeMillis() % 100000).toInt()
+    ) {
+        if (!areNotificationsEnabled(context)) {
+            Log.d(TAG, "Notifications are disabled in app settings")
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
+                Log.w(TAG, "Cannot post custom notification: POST_NOTIFICATIONS permission not granted")
+                return
+            }
+        }
+
+        try {
+            createNotificationChannel(context)
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                notificationId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val iconRes = getSmallIconResource(iconName)
+            val displayTitle = title.trim().ifBlank { "Routine Reminder" }
+
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(iconRes)
+                .setContentTitle(displayTitle)
+                .setContentText(message.ifBlank { "Automated notification" })
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+
+            if (message.isNotBlank()) {
+                builder.setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            }
+
+            NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+            Log.i(TAG, "Custom notification '$displayTitle' posted (ID: $notificationId, icon: $iconName)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error posting custom notification", e)
         }
     }
 }
