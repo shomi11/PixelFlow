@@ -180,6 +180,9 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
                 com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
+                if (routine.restoreOnEnd && com.example.service.RoutineStateSnapshotManager.hasSnapshot(getApplication(), routine.id)) {
+                    executionEngine.restoreRoutineSettings(routine, "Routine Disabled")
+                }
             }
             _userMessage.emit("Routine \"${routine.title}\" ${if (newState) "enabled" else "disabled"}")
         }
@@ -206,6 +209,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             }
             _userMessage.emit("Routine ${if (isEnabled) "enabled" else "disabled"}")
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
         }
     }
 
@@ -230,6 +234,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
             com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
             repository.deleteRoutine(routine)
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine \"${routine.title}\" deleted")
         }
     }
@@ -239,6 +244,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
             com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             repository.deleteRoutineById(routineId)
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine deleted")
         }
     }
@@ -264,6 +270,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                     com.example.background.GeofenceManager.registerGeofence(getApplication(), savedRoutine)
                 }
             }
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             onComplete()
         }
     }
@@ -280,6 +287,19 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun restoreRoutineNow(routine: Routine) {
+        viewModelScope.launch {
+            _userMessage.emit("Restoring settings for \"${routine.title}\"...")
+            val success = executionEngine.restoreRoutineSettings(routine, "Manually Ended by User")
+            if (success) {
+                _userMessage.emit("Restored settings to how they were before \"${routine.title}\"!")
+            } else {
+                _userMessage.emit("No saved settings snapshot found for \"${routine.title}\"")
+            }
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
+        }
+    }
+
     fun executeConsoleCommand(cmd: String) {
         viewModelScope.launch {
             val result = ShizukuManager.executeCommand(cmd)
@@ -291,6 +311,12 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.clearLogs()
             _userMessage.emit("Execution logs cleared")
+        }
+    }
+
+    fun checkShizukuStatus() {
+        viewModelScope.launch {
+            ShizukuManager.checkStatus()
         }
     }
 
@@ -332,6 +358,19 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 _userMessage.emit("Shizuku reconnected successfully!")
             } else {
                 _userMessage.emit("Shizuku binder unreachable. Ensure Wireless Debugging is running.")
+            }
+        }
+    }
+
+    fun grantDndAccessViaShizuku() {
+        viewModelScope.launch {
+            _userMessage.emit("Granting Do Not Disturb policy via Shizuku...")
+            val pkg = getApplication<Application>().packageName
+            val result = ShizukuManager.grantNotificationPolicyAccess(pkg)
+            if (result.isSuccess) {
+                _userMessage.emit("Do Not Disturb access granted via Shizuku!")
+            } else {
+                _userMessage.emit("Shizuku offline or unauthorized: ${result.stderr.ifEmpty { "Please allow Shizuku permission first" }}")
             }
         }
     }

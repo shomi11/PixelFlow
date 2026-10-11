@@ -124,12 +124,112 @@ object RoutineNotificationManager {
                 append("Time: $formattedTime\n\n")
                 append("Actions Taken:\n")
                 append(actionsDetails)
+                if (routine.restoreOnEnd) {
+                    append("\n\n↺ Previous settings will restore automatically when this routine ends.")
+                }
                 append("\n\nStatus: $status")
             }
 
             val statusIconPrefix = if (isSuccess) "✓" else "⚠"
             val title = if (isSuccess) "$statusIconPrefix Routine Executed: ${routine.title}" else "⚠ Routine Execution Failed: ${routine.title}"
-            val shortSummary = if (isSuccess) "${actions.size} action(s) applied • $status" else "Actions could not be applied • $status"
+            val shortSummary = if (isSuccess) {
+                if (routine.restoreOnEnd) "${actions.size} action(s) applied • Will restore on end"
+                else "${actions.size} action(s) applied • $status"
+            } else {
+                "Actions could not be applied • $status"
+            }
+
+            val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setContentText(shortSummary)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(bigTextContent))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_EVENT)
+
+            if (isSuccess && routine.restoreOnEnd) {
+                val restoreIntent = Intent(context, com.example.background.RoutineAlarmReceiver::class.java).apply {
+                    action = com.example.background.RoutineAlarmManager.ACTION_RESTORE_ROUTINE
+                    putExtra(com.example.background.RoutineAlarmManager.EXTRA_ROUTINE_ID, routine.id)
+                }
+                val restorePendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    (routine.id + 80000).toInt(),
+                    restoreIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                notificationBuilder.addAction(
+                    android.R.drawable.ic_menu_revert,
+                    "End & Restore",
+                    restorePendingIntent
+                )
+            }
+
+            val notification = notificationBuilder.build()
+
+            // Notification ID calculated so each routine updates its entry
+            val notificationId = 10000 + (routine.id % 5000).toInt()
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+            Log.i(TAG, "Notification posted for routine '${routine.title}' (ID: $notificationId)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to post routine execution notification", e)
+        }
+    }
+
+    /**
+     * Posts a notification informing the user that a routine ended and previous settings were restored.
+     */
+    fun notifyRoutineRestored(
+        context: Context,
+        routine: RoutineEntity,
+        restoredActions: List<RoutineActionItem>,
+        reason: String,
+        isSuccess: Boolean
+    ) {
+        if (!areNotificationsEnabled(context)) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            if (permissionCheck != PackageManager.PERMISSION_GRANTED) return
+        }
+
+        try {
+            createNotificationChannel(context)
+
+            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val formattedTime = timeFormat.format(Date())
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("EXTRA_ROUTINE_ID", routine.id)
+                putExtra("EXTRA_SHOW_LOGS", true)
+            }
+
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                (routine.id + 90000).toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val actionsDetails = if (restoredActions.isNotEmpty()) {
+                restoredActions.joinToString("\n") { "• ${it.toSummary()}" }
+            } else {
+                "• All previous settings restored"
+            }
+
+            val bigTextContent = buildString {
+                append("Routine Ended: $reason\n")
+                append("Time: $formattedTime\n\n")
+                append("Restored Previous Settings:\n")
+                append(actionsDetails)
+                append("\n\nStatus: RESTORED")
+            }
+
+            val title = if (isSuccess) "↺ Routine Ended: ${routine.title}" else "⚠ Routine End Error: ${routine.title}"
+            val shortSummary = "Restored ${restoredActions.size} setting(s) to previous values"
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -142,12 +242,11 @@ object RoutineNotificationManager {
                 .setCategory(NotificationCompat.CATEGORY_EVENT)
                 .build()
 
-            // Notification ID calculated so each routine updates its entry
             val notificationId = 10000 + (routine.id % 5000).toInt()
             NotificationManagerCompat.from(context).notify(notificationId, notification)
-            Log.i(TAG, "Notification posted for routine '${routine.title}' (ID: $notificationId)")
+            Log.i(TAG, "Notification posted for restored routine '${routine.title}' (ID: $notificationId)")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to post routine execution notification", e)
+            Log.e(TAG, "Failed to post routine restored notification", e)
         }
     }
 

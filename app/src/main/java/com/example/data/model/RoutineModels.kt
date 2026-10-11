@@ -166,6 +166,9 @@ data class Routine(
     @ColumnInfo(name = "lastExecutionStatus")
     val lastExecutionStatus: String = "IDLE", // IDLE, SUCCESS, FAILED, SIMULATED
 
+    @ColumnInfo(name = "restoreOnEnd", defaultValue = "1")
+    val restoreOnEnd: Boolean = true,
+
     @ColumnInfo(name = "createdAt")
     val createdAt: Long = System.currentTimeMillis()
 ) {
@@ -330,6 +333,7 @@ data class Routine(
         actionsJson: String,
         lastExecutedTimestamp: Long = 0L,
         lastExecutionStatus: String = "IDLE",
+        restoreOnEnd: Boolean = true,
         createdAt: Long = System.currentTimeMillis()
     ) : this(
         id = id,
@@ -342,6 +346,7 @@ data class Routine(
         colorHex = colorHex,
         lastExecutedTimestamp = lastExecutedTimestamp,
         lastExecutionStatus = lastExecutionStatus,
+        restoreOnEnd = restoreOnEnd,
         createdAt = createdAt
     )
 

@@ -19,6 +19,18 @@ class RoutineRepository(
     companion object {
         private const val PREFS_NAME = "pixel_routines_prefs"
         private const val PREF_DEFAULTS_POPULATED = "routines_defaults_populated_v1"
+
+        @Volatile
+        private var INSTANCE: RoutineRepository? = null
+
+        fun getInstance(context: Context): RoutineRepository {
+            return INSTANCE ?: synchronized(this) {
+                val db = com.example.data.local.AppDatabase.getDatabase(context.applicationContext)
+                val instance = RoutineRepository(db.routineDao(), context.applicationContext)
+                INSTANCE = instance
+                instance
+            }
+        }
     }
 
     val allRoutines: Flow<List<RoutineEntity>> = routineDao.getAllRoutines()

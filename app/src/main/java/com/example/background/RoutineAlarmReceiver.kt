@@ -23,8 +23,10 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
-        if (action != RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM) return
+        val action = intent.action ?: return
+        if (action != RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM &&
+            action != RoutineAlarmManager.ACTION_RESTORE_ROUTINE &&
+            action != RoutineAlarmManager.ACTION_END_ROUTINE_ALARM) return
 
         val routineId = intent.getLongExtra(RoutineAlarmManager.EXTRA_ROUTINE_ID, -1L)
         val isTest = intent.getBooleanExtra(RoutineAlarmManager.EXTRA_IS_TEST, false)
@@ -34,7 +36,7 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
             return
         }
 
-        Log.i(TAG, "AlarmManager triggered for routine ID: $routineId (isTest=$isTest)")
+        Log.i(TAG, "AlarmManager triggered action $action for routine ID: $routineId (isTest=$isTest)")
 
         // Hold a partial wake lock to guarantee CPU stays active while executing async actions
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -47,32 +49,55 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
         }
 
         val pendingResult = goAsync()
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getDatabase(context)
+                val db = AppDatabase.getDatabase(appContext)
                 val routine = db.routineDao().getRoutineById(routineId)
+                val engine = RoutineExecutionEngine(appContext)
 
-                if (routine != null && (routine.isEnabled || isTest)) {
-                    val triggerReason = if (isTest) {
-                        "Precision Alarm Test (Immediate)"
-                    } else {
-                        "AlarmManager Scheduled Trigger (${routine.getTriggerSummary()})"
-                    }
+                if (routine != null) {
+                    when (action) {
+                        RoutineAlarmManager.ACTION_RESTORE_ROUTINE -> {
+                            Log.i(TAG, "Restoring routine ${routine.name} requested by user action")
+                            engine.restoreRoutineSettings(routine, "Manually Ended by User")
+                        }
+                        RoutineAlarmManager.ACTION_END_ROUTINE_ALARM -> {
+                            Log.i(TAG, "Routine schedule end alarm triggered for ${routine.name}")
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Scheduled time window ended")
+                            }
+                            if (routine.isEnabled) {
+                                RoutineAlarmManager.scheduleExactRoutineAlarm(appContext, routine)
+                            }
+                        }
+                        RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM -> {
+                            if (routine.isEnabled || isTest) {
+                                val triggerReason = if (isTest) {
+                                    "Precision Alarm Test (Immediate)"
+                                } else {
+                                    "AlarmManager Scheduled Trigger (${routine.getTriggerSummary()})"
+                                }
 
-                    val engine = RoutineExecutionEngine(context)
-                    val success = engine.executeRoutine(routine, triggerReason)
-                    Log.i(TAG, "Routine executed via precision alarm: ${routine.name}, success=$success")
+                                val success = engine.executeRoutine(routine, triggerReason)
+                                Log.i(TAG, "Routine executed via precision alarm: ${routine.name}, success=$success")
 
-                    // Reschedule next recurring alarm instance
-                    if (!isTest && routine.isEnabled) {
-                        RoutineAlarmManager.scheduleExactRoutineAlarm(context, routine)
+                                // Reschedule next recurring alarm instance
+                                if (!isTest && routine.isEnabled) {
+                                    RoutineAlarmManager.scheduleExactRoutineAlarm(appContext, routine)
+                                }
+                            } else {
+                                Log.w(TAG, "Routine $routineId disabled. Canceling alarm.")
+                                RoutineAlarmManager.cancelRoutineAlarm(appContext, routineId)
+                            }
+                        }
                     }
                 } else {
-                    Log.w(TAG, "Routine $routineId not found or disabled. Canceling alarm.")
-                    RoutineAlarmManager.cancelRoutineAlarm(context, routineId)
+                    Log.w(TAG, "Routine $routineId not found. Canceling alarm.")
+                    RoutineAlarmManager.cancelRoutineAlarm(appContext, routineId)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error executing routine from alarm", e)
+                Log.e(TAG, "Error executing routine action from alarm", e)
             } finally {
                 try {
                     if (wakeLock?.isHeld == true) {
@@ -81,6 +106,7 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
                 } catch (e: Throwable) {
                     Log.w(TAG, "Error releasing wake lock", e)
                 }
+                com.example.widget.WidgetUpdateHelper.updateAllWidgets(appContext)
                 pendingResult.finish()
             }
         }

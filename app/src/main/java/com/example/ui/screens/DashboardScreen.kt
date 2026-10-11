@@ -1,8 +1,13 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -41,6 +46,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lightbulb
@@ -54,12 +60,16 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -86,6 +96,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -104,6 +115,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.background.RoutineAlarmManager
+import com.example.ui.components.ExpressiveFilterChip
+import com.example.ui.components.ExpressiveSwitch
 import com.example.data.model.RoutineEntity
 import com.example.data.model.TriggerType
 import com.example.shizuku.ShizukuState
@@ -113,6 +126,7 @@ import com.example.ui.components.ShizukuDiagnosticsDialog
 import com.example.ui.components.ShizukuSettingsSheet
 import com.example.ui.components.ShizukuStatusChip
 import com.example.ui.components.ShizukuStatusIndicator
+import com.example.ui.util.rememberAppHapticFeedback
 import com.example.ui.viewmodel.RoutineViewModel
 import kotlinx.coroutines.flow.collectLatest
 
@@ -124,6 +138,7 @@ fun DashboardScreen(
     onEditRoutineClick: (Long) -> Unit,
     onOpenOnboarding: () -> Unit = {}
 ) {
+    val haptics = rememberAppHapticFeedback()
     val routines by viewModel.routines.collectAsState()
     val runningRoutineIds by viewModel.runningRoutineIds.collectAsState()
     val logs by viewModel.logs.collectAsState()
@@ -158,10 +173,34 @@ fun DashboardScreen(
         }
     }
 
+    val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager }
+    var hasDndAccess by remember {
+        mutableStateOf(notificationManager?.isNotificationPolicyAccessGranted == true)
+    }
+
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        hasDndAccess = notificationManager?.isNotificationPolicyAccessGranted == true
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                hasDndAccess = notificationManager?.isNotificationPolicyAccessGranted == true
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    hasNotificationPermission = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+                }
+                viewModel.checkShizukuStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -193,21 +232,28 @@ fun DashboardScreen(
                 title = {
                     Text(
                         text = "Pixel Routines",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge
+                        fontWeight = FontWeight.ExtraBold,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 actions = {
                     // 1. Shizuku Status Chip: Clicking opens the dedicated Shizuku Settings Sheet
                     ShizukuStatusChip(
                         state = shizukuState,
-                        onClick = { showShizukuSheet = true },
+                        onClick = {
+                            haptics.buttonClick()
+                            showShizukuSheet = true
+                        },
                         modifier = Modifier.padding(end = 4.dp)
                     )
 
                     // 2. Execution History / Logs button
                     IconButton(
-                        onClick = { showLogsDialog = true },
+                        onClick = {
+                            haptics.buttonClick()
+                            showLogsDialog = true
+                        },
                         modifier = Modifier.testTag("open_logs_btn")
                     ) {
                         Icon(
@@ -219,7 +265,10 @@ fun DashboardScreen(
                     // 3. Overflow Menu for secondary options (Alerts, Diagnostics, Guide)
                     Box {
                         IconButton(
-                            onClick = { showMoreMenu = true },
+                            onClick = {
+                                haptics.buttonClick()
+                                showMoreMenu = true
+                            },
                             modifier = Modifier.testTag("open_more_menu_btn")
                         ) {
                             Icon(
@@ -235,6 +284,7 @@ fun DashboardScreen(
                             DropdownMenuItem(
                                 text = { Text("Shizuku Controls") },
                                 onClick = {
+                                    haptics.buttonClick()
                                     showMoreMenu = false
                                     showShizukuSheet = true
                                 },
@@ -249,6 +299,7 @@ fun DashboardScreen(
                             DropdownMenuItem(
                                 text = { Text("Routine Alerts") },
                                 onClick = {
+                                    haptics.buttonClick()
                                     showMoreMenu = false
                                     showNotificationDialog = true
                                 },
@@ -262,6 +313,7 @@ fun DashboardScreen(
                             DropdownMenuItem(
                                 text = { Text("Terminal Console") },
                                 onClick = {
+                                    haptics.buttonClick()
                                     showMoreMenu = false
                                     showConsoleDialog = true
                                 },
@@ -272,6 +324,7 @@ fun DashboardScreen(
                             DropdownMenuItem(
                                 text = { Text("Diagnostics") },
                                 onClick = {
+                                    haptics.buttonClick()
                                     showMoreMenu = false
                                     showDiagnosticsDialog = true
                                 },
@@ -282,6 +335,7 @@ fun DashboardScreen(
                             DropdownMenuItem(
                                 text = { Text("Setup Guide") },
                                 onClick = {
+                                    haptics.buttonClick()
                                     showMoreMenu = false
                                     onOpenOnboarding()
                                 },
@@ -299,7 +353,10 @@ fun DashboardScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onCreateRoutineClick,
+                onClick = {
+                    haptics.buttonClick()
+                    onCreateRoutineClick()
+                },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text("New Routine") },
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -320,41 +377,53 @@ fun DashboardScreen(
                 item {
                     val isPermReq = shizukuState == ShizukuState.PERMISSION_REQUIRED
                     val bannerColor = if (isPermReq) Color(0xFFE65100) else Color(0xFFC62828)
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = bannerColor.copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, bannerColor.copy(alpha = 0.25f)),
+                    ElevatedCard(
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { showShizukuSheet = true }
                             .testTag("shizuku_attention_banner")
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(bannerColor.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
+                            Surface(
+                                shape = CircleShape,
+                                color = bannerColor.copy(alpha = 0.15f),
+                                modifier = Modifier.size(42.dp)
                             ) {
-                                Icon(
-                                    imageVector = if (isPermReq) Icons.Default.Key else Icons.Default.Security,
-                                    contentDescription = null,
-                                    tint = bannerColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (isPermReq) Icons.Default.Key else Icons.Default.Security,
+                                        contentDescription = null,
+                                        tint = bannerColor,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isPermReq) "Shizuku Permission Required" else "Shizuku Service Offline",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = bannerColor
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(bannerColor)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isPermReq) "Shizuku Permission Required" else "Shizuku Service Offline",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = bannerColor
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = if (isPermReq) "Tap to grant permission for system automation" else "Tap to configure wireless pairing",
                                     style = MaterialTheme.typography.bodySmall,
@@ -364,8 +433,8 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             FilledTonalButton(
                                 onClick = { showShizukuSheet = true },
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 Text("Configure")
                             }
@@ -374,7 +443,104 @@ fun DashboardScreen(
                 }
             }
 
-            // Filter Chips & Stats
+            // DND / Sound Mode Access Banner if not granted and sound profiles exist
+            if (!hasDndAccess && routines.any { r -> r.actions.any { a -> a.type.name == "SOUND_PROFILE" } }) {
+                item {
+                    val dndColor = Color(0xFF673AB7) // Material Deep Purple
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = dndColor.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, dndColor.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                try {
+                                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // Fallback to app details
+                                    val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(fallback)
+                                }
+                            }
+                            .testTag("dnd_access_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(dndColor.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Vibration,
+                                    contentDescription = null,
+                                    tint = dndColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Ringer & Vibrate Permission",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = dndColor
+                                )
+                                Text(
+                                    text = "Tap to grant Do Not Disturb access so routines can switch to Vibrate/Silent mode",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (shizukuState == ShizukuState.AUTHORIZED) {
+                                    FilledTonalButton(
+                                        onClick = { viewModel.grantDndAccessViaShizuku() },
+                                        shape = RoundedCornerShape(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                        modifier = Modifier.testTag("dnd_shizuku_grant_btn")
+                                    ) {
+                                        Text("Auto-Grant")
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.fromParts("package", context.packageName, null)
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                            }
+                                            context.startActivity(fallback)
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("dnd_settings_btn")
+                                ) {
+                                    Text("Settings")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -382,16 +548,16 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
+                        ExpressiveFilterChip(
                             selected = !filterActiveOnly,
                             onClick = { filterActiveOnly = false },
-                            label = { Text("All (${routines.size})") },
+                            label = { Text("All (${routines.size})", fontWeight = if (!filterActiveOnly) FontWeight.Bold else FontWeight.Medium) },
                             modifier = Modifier.testTag("filter_all_chip")
                         )
-                        FilterChip(
+                        ExpressiveFilterChip(
                             selected = filterActiveOnly,
                             onClick = { filterActiveOnly = true },
-                            label = { Text("Active (${routines.count { it.isEnabled }})") },
+                            label = { Text("Active (${routines.count { it.isEnabled }})", fontWeight = if (filterActiveOnly) FontWeight.Bold else FontWeight.Medium) },
                             modifier = Modifier.testTag("filter_active_chip")
                         )
                     }
@@ -417,6 +583,7 @@ fun DashboardScreen(
                         isRunning = isExecuting,
                         onToggle = { viewModel.toggleRoutine(routine) },
                         onRunNow = { viewModel.executeRoutineNow(routine) },
+                        onRestoreNow = { viewModel.restoreRoutineNow(routine) },
                         onEdit = { onEditRoutineClick(routine.id) },
                         onDelete = { viewModel.deleteRoutine(routine) }
                     )
@@ -500,6 +667,7 @@ fun RoutineCard(
     isRunning: Boolean = false,
     onToggle: () -> Unit,
     onRunNow: () -> Unit,
+    onRestoreNow: () -> Unit = {},
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -515,49 +683,55 @@ fun RoutineCard(
 
     val isExecutingNow = isRunning || routine.lastExecutionStatus == "RUNNING"
     val isInActiveSchedule = routine.isCurrentlyInActiveWindow()
-    val isCurrentlyRunning = isExecutingNow || isInActiveSchedule
+    val hasActiveSnapshot = remember(isExecutingNow, routine.id) {
+        com.example.service.RoutineStateSnapshotManager.hasSnapshot(context, routine.id)
+    }
+    val isCurrentlyRunning = isExecutingNow || isInActiveSchedule || hasActiveSnapshot
+    var showCardInfoDialog by remember { mutableStateOf(false) }
+    val haptics = rememberAppHapticFeedback()
 
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isCurrentlyRunning) {
-                    Modifier.border(1.5.dp, Color(0xFF00897B), RoundedCornerShape(18.dp))
-                } else Modifier
-            )
-            .clickable { onEdit() }
+            .clickable {
+                haptics.buttonClick()
+                onEdit()
+            }
             .testTag("routine_card_${routine.id}"),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(28.dp),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = if (isCurrentlyRunning) 4.dp else 2.dp,
+            pressedElevation = 6.dp
+        ),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = if (isCurrentlyRunning) Color(0xFF00897B).copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
+            containerColor = if (isCurrentlyRunning) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             // Currently Running prominent status label
             if (isCurrentlyRunning) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = CircleShape,
                     color = Color(0xFF00897B).copy(alpha = 0.16f),
-                    border = BorderStroke(1.dp, Color(0xFF00897B).copy(alpha = 0.6f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
                         .testTag("currently_running_badge_${routine.id}")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Currently Running",
-                            tint = Color(0xFF00897B),
-                            modifier = Modifier.size(16.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF00897B))
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (isExecutingNow) "CURRENTLY RUNNING • Executing actions" else "CURRENTLY RUNNING • Active schedule",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF00897B)
                         )
@@ -604,13 +778,10 @@ fun RoutineCard(
                     }
                 }
 
-                Switch(
+                ExpressiveSwitch(
                     checked = routine.isEnabled,
                     onCheckedChange = { onToggle() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = accentColor,
-                        checkedTrackColor = accentColor.copy(alpha = 0.35f)
-                    ),
+                    activeColor = accentColor,
                     modifier = Modifier.testTag("routine_switch_${routine.id}")
                 )
             }
@@ -710,48 +881,233 @@ fun RoutineCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Card Action Buttons: Run Now, Edit, Delete
+            if (routine.restoreOnEnd) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
+                    shadowElevation = 0.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "AUTO-RESTORE ACTIVE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                text = "Reverts modified device settings when routine finishes",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Card Action Buttons: Run Now, End & Restore, Edit, Delete
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalButton(
-                    onClick = onRunNow,
-                    modifier = Modifier.testTag("run_routine_btn_${routine.id}"),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Run Now", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(
+                        onClick = {
+                            haptics.confirmAction()
+                            onRunNow()
+                        },
+                        modifier = Modifier.testTag("run_routine_btn_${routine.id}"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (hasActiveSnapshot) "Run Again" else "Run Now", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    if (hasActiveSnapshot) {
+                        Button(
+                            onClick = {
+                                haptics.buttonClick()
+                                onRestoreNow()
+                            },
+                            modifier = Modifier.testTag("restore_routine_btn_${routine.id}"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiary
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("End & Restore", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
 
-                Row {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    // Auxiliary feature 1: Edit
                     IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier.testTag("edit_routine_btn_${routine.id}")
+                        onClick = {
+                            haptics.buttonClick()
+                            onEdit()
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("edit_routine_btn_${routine.id}")
                     ) {
                         Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.outline
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Routine",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            modifier = Modifier.size(17.dp)
                         )
                     }
+
+                    // Auxiliary feature 2: Share
                     IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.testTag("delete_routine_btn_${routine.id}")
+                        onClick = {
+                            haptics.buttonClick()
+                            val acts = actions.joinToString(" • ") { it.toSummary() }
+                            val shareText = buildString {
+                                appendLine("⚡ Routine: ${routine.title}")
+                                if (routine.description.isNotBlank()) appendLine("Description: ${routine.description}")
+                                appendLine("Trigger: ${routine.getTriggerSummary()}")
+                                if (acts.isNotBlank()) appendLine("Actions: $acts")
+                                appendLine("\nCreated with Pixel Routines")
+                            }
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Pixel Routine: ${routine.title}")
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share Routine"))
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("share_routine_btn_${routine.id}")
                     ) {
                         Icon(
-                            Icons.Default.Delete,
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share Routine",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+
+                    // Auxiliary feature 3: Info
+                    IconButton(
+                        onClick = {
+                            haptics.buttonClick()
+                            showCardInfoDialog = true
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("info_routine_btn_${routine.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Routine Info",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+
+                    // Delete
+                    IconButton(
+                        onClick = {
+                            haptics.rejectOrDelete()
+                            onDelete()
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("delete_routine_btn_${routine.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
                             contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
             }
         }
+    }
+
+    if (showCardInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showCardInfoDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(routine.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (routine.description.isNotBlank()) {
+                        Text(routine.description, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        text = "Trigger: ${routine.getTriggerSummary()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Status: ${if (routine.isEnabled) "Active / Scheduled" else "Disabled"}",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    if (actions.isNotEmpty()) {
+                        Text(
+                            "Configured Actions (${actions.size}):",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        actions.forEach { act ->
+                            Text("• ${act.toSummary()}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCardInfoDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 
@@ -927,7 +1283,7 @@ fun NotificationSettingsDialog(
                                 color = MaterialTheme.colorScheme.outline
                             )
                         }
-                        Switch(
+                        ExpressiveSwitch(
                             checked = isEnabled,
                             onCheckedChange = onToggleEnabled,
                             modifier = Modifier.testTag("notification_toggle_switch")

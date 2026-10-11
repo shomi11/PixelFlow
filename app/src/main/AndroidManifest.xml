@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Normal (install-time) permissions -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
@@ -23,6 +24,10 @@
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
@@ -54,8 +59,7 @@
             android:authorities="${applicationId}.shizuku"
             android:multiprocess="false"
             android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+            android:exported="true" />
 
         <activity
             android:name=".MainActivity"
@@ -85,13 +89,15 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.example.ACTION_TRIGGER_ROUTINE_ALARM" />
+                <action android:name="com.example.ACTION_RESTORE_ROUTINE" />
+                <action android:name="com.example.ACTION_END_ROUTINE_ALARM" />
             </intent-filter>
         </receiver>
 
         <receiver
             android:name=".background.BatteryTriggerReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
@@ -102,7 +108,7 @@
         <receiver
             android:name=".background.WifiTriggerReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.net.wifi.STATE_CHANGE" />
             </intent-filter>
@@ -111,7 +117,7 @@
         <receiver
             android:name=".background.BluetoothTriggerReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
                 <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
@@ -126,6 +132,55 @@
                 <action android:name="com.example.ACTION_GEOFENCE_TRANSITION" />
             </intent-filter>
         </receiver>
+
+        <!-- App Widget Providers -->
+        <!-- 1. Routines List Overview Widget -->
+        <receiver
+            android:name=".widget.RoutinesListWidgetProvider"
+            android:label="@string/widget_routines_list_title"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.ACTION_WIDGET_RUN_ROUTINE" />
+                <action android:name="com.example.ACTION_WIDGET_STOP_ROUTINE" />
+                <action android:name="com.example.ACTION_WIDGET_REFRESH" />
+                <action android:name="com.example.ACTION_OPEN_ROUTINE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_routines_list_info" />
+        </receiver>
+
+        <!-- RemoteViews Service for List Widget -->
+        <service
+            android:name=".widget.RoutinesListWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
+        <!-- 2. Single Routine Quick Control Widget -->
+        <receiver
+            android:name=".widget.SingleRoutineWidgetProvider"
+            android:label="@string/widget_single_routine_title"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.ACTION_SINGLE_WIDGET_RUN_ROUTINE" />
+                <action android:name="com.example.ACTION_SINGLE_WIDGET_STOP_ROUTINE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_single_routine_info" />
+        </receiver>
+
+        <!-- Configuration Activity for Single Routine Widget -->
+        <activity
+            android:name=".widget.SingleRoutineWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
 
     </application>
 

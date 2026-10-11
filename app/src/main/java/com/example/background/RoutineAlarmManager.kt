@@ -30,6 +30,8 @@ object RoutineAlarmManager {
 
     private const val TAG = "RoutineAlarmManager"
     const val ACTION_TRIGGER_ROUTINE_ALARM = "com.example.ACTION_TRIGGER_ROUTINE_ALARM"
+    const val ACTION_RESTORE_ROUTINE = "com.example.ACTION_RESTORE_ROUTINE"
+    const val ACTION_END_ROUTINE_ALARM = "com.example.ACTION_END_ROUTINE_ALARM"
     const val EXTRA_ROUTINE_ID = "extra_routine_id"
     const val EXTRA_IS_TEST = "extra_is_test"
 
@@ -112,6 +114,33 @@ object RoutineAlarmManager {
                 Log.e(TAG, "Failed to schedule fallback alarm for routine ${routine.name}", e3)
             }
         }
+
+        // Schedule restore alarm when time schedule routine reaches its configured end time
+        if (routine.restoreOnEnd && routine.triggerType == TriggerType.TIME) {
+            val nextEndMillis = calculateNextEndTriggerMillis(routine.triggerConfigJson)
+            if (nextEndMillis != null && nextEndMillis > System.currentTimeMillis()) {
+                scheduleExactEndAlarm(context, routine.id, nextEndMillis)
+            }
+        }
+    }
+
+    /**
+     * Calculates the exact epoch timestamp (in millis) for the scheduled end time of a routine window.
+     */
+    fun calculateNextEndTriggerMillis(configJson: String): Long? {
+        return try {
+            val json = JSONObject(configJson)
+            val endTimeStr = json.optString("endTime", "")
+            val startTimeStr = json.optString("startTime", "")
+            if (endTimeStr.isBlank() || endTimeStr == startTimeStr) return null
+
+            val endConfigJson = JSONObject(configJson).apply {
+                put("startTime", endTimeStr)
+            }.toString()
+            calculateNextTriggerMillis(endConfigJson)
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**
@@ -153,7 +182,61 @@ object RoutineAlarmManager {
         val pendingIntent = createAlarmPendingIntent(context, routineId)
         alarmManager.cancel(pendingIntent)
         pendingIntent.cancel()
-        Log.i(TAG, "Canceled precision alarm for routine ID: $routineId")
+
+        cancelEndAlarm(context, routineId)
+        Log.i(TAG, "Canceled precision alarms for routine ID: $routineId")
+    }
+
+    /**
+     * Schedules an alarm to restore previous settings when a scheduled routine's time window ends.
+     */
+    fun scheduleExactEndAlarm(context: Context, routineId: Long, endTriggerMillis: Long) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = Intent(context, RoutineAlarmReceiver::class.java).apply {
+            action = ACTION_END_ROUTINE_ALARM
+            putExtra(EXTRA_ROUTINE_ID, routineId)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            (routineId + 30000).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    endTriggerMillis,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    endTriggerMillis,
+                    pendingIntent
+                )
+            }
+            Log.i(TAG, "Scheduled end-of-routine restore alarm for routine ID: $routineId at ${formatNextTriggerHumanReadable(endTriggerMillis)}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed scheduling end alarm for routine ID: $routineId", e)
+        }
+    }
+
+    fun cancelEndAlarm(context: Context, routineId: Long) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val intent = Intent(context, RoutineAlarmReceiver::class.java).apply {
+            action = ACTION_END_ROUTINE_ALARM
+            putExtra(EXTRA_ROUTINE_ID, routineId)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            (routineId + 30000).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
     }
 
     /**

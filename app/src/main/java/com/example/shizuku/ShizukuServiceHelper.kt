@@ -237,6 +237,11 @@ object ShizukuServiceHelper {
         }
 
         initialize()
+        try {
+            ShizukuPermissionManager.reconnectShizuku(force = true)
+        } catch (e: Throwable) {
+            Log.w(TAG, "reconnectShizuku error: ${e.message}")
+        }
 
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < timeoutMs) {
@@ -277,7 +282,6 @@ object ShizukuServiceHelper {
                     Array<String>::class.java,
                     String::class.java
                 ).apply { isAccessible = true }
-
                 val process = newProcessMethod.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
 
                 val stdout = process.inputStream.bufferedReader().use { it.readText() }.trim()

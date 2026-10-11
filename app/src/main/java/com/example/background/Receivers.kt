@@ -50,13 +50,23 @@ class BatteryTriggerReceiver : BroadcastReceiver() {
 
         val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
 
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val wakeLock = powerManager?.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK,
+            "PixelRoutines:BatteryTriggerWakeLock"
+        )?.apply {
+            setReferenceCounted(false)
+            acquire(60_000L)
+        }
+
         val pendingResult = goAsync()
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getDatabase(context)
+                val db = AppDatabase.getDatabase(appContext)
                 val activeRoutines = db.routineDao().getActiveRoutines()
                     .filter { it.triggerType == TriggerType.BATTERY }
-                val engine = RoutineExecutionEngine(context)
+                val engine = RoutineExecutionEngine(appContext)
 
                 for (routine in activeRoutines) {
                     val config = JSONObject(routine.triggerConfigJson)
@@ -72,8 +82,11 @@ class BatteryTriggerReceiver : BroadcastReceiver() {
                         if (isPowerConnected && !wasCharging) {
                             prefs.edit().putBoolean(lastChargedKey, true).apply()
                             engine.executeRoutine(routine, "Charging Connected")
-                        } else if (isPowerDisconnected) {
+                        } else if (isPowerDisconnected && wasCharging) {
                             prefs.edit().putBoolean(lastChargedKey, false).apply()
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Charging Disconnected")
+                            }
                         }
                     } else {
                         // Battery level trigger: only trigger on transition below target level
@@ -89,15 +102,24 @@ class BatteryTriggerReceiver : BroadcastReceiver() {
                                 .putLong(lastTriggeredKey, System.currentTimeMillis())
                                 .apply()
                             engine.executeRoutine(routine, "Battery Low ($batteryPct%)")
-                        } else if (batteryPct > targetLevel + 5) {
+                        } else if (batteryPct > targetLevel + 5 && wasLow) {
                             // Reset threshold trigger when battery charges back above target + 5%
                             prefs.edit().putBoolean(wasLowKey, false).putLong(lastTriggeredKey, 0L).apply()
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Battery Recharged to $batteryPct%")
+                            }
                         }
                     }
                 }
             } catch (e: Exception) {
                 Log.e("BatteryTriggerReceiver", "Error evaluating battery triggers", e)
             } finally {
+                try {
+                    if (wakeLock?.isHeld == true) wakeLock.release()
+                } catch (e: Throwable) {
+                    // Ignore
+                }
+                com.example.widget.WidgetUpdateHelper.updateAllWidgets(appContext)
                 pendingResult.finish()
             }
         }
@@ -126,13 +148,23 @@ class WifiTriggerReceiver : BroadcastReceiver() {
 
         val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
 
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val wakeLock = powerManager?.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK,
+            "PixelRoutines:WifiTriggerWakeLock"
+        )?.apply {
+            setReferenceCounted(false)
+            acquire(60_000L)
+        }
+
         val pendingResult = goAsync()
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getDatabase(context)
+                val db = AppDatabase.getDatabase(appContext)
                 val activeRoutines = db.routineDao().getActiveRoutines()
                     .filter { it.triggerType == TriggerType.WIFI }
-                val engine = RoutineExecutionEngine(context)
+                val engine = RoutineExecutionEngine(appContext)
 
                 for (routine in activeRoutines) {
                     val config = JSONObject(routine.triggerConfigJson)
@@ -157,22 +189,34 @@ class WifiTriggerReceiver : BroadcastReceiver() {
                                 .putString(lastSsidKey, currentSsid)
                                 .apply()
                             engine.executeRoutine(routine, "Wi-Fi: Connected to $currentSsid")
-                        } else if (!isConnected) {
+                        } else if (!isConnected && wasConnected) {
                             prefs.edit().putBoolean(lastStateKey, false).putString(lastSsidKey, "").apply()
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Wi-Fi: Disconnected from $lastSsid")
+                            }
                         }
                     } else {
                         // Disconnect trigger: only when transitioning from connected to disconnected
                         if (!isConnected && wasConnected) {
                             prefs.edit().putBoolean(lastStateKey, false).apply()
                             engine.executeRoutine(routine, "Wi-Fi: Disconnected")
-                        } else if (isConnected) {
+                        } else if (isConnected && !wasConnected) {
                             prefs.edit().putBoolean(lastStateKey, true).putString(lastSsidKey, currentSsid).apply()
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Wi-Fi: Reconnected to $currentSsid")
+                            }
                         }
                     }
                 }
             } catch (e: Exception) {
                 Log.e("WifiTriggerReceiver", "Error processing wifi trigger", e)
             } finally {
+                try {
+                    if (wakeLock?.isHeld == true) wakeLock.release()
+                } catch (e: Throwable) {
+                    // Ignore
+                }
+                com.example.widget.WidgetUpdateHelper.updateAllWidgets(appContext)
                 pendingResult.finish()
             }
         }
@@ -197,13 +241,23 @@ class BluetoothTriggerReceiver : BroadcastReceiver() {
 
         val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
 
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        val wakeLock = powerManager?.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK,
+            "PixelRoutines:BluetoothTriggerWakeLock"
+        )?.apply {
+            setReferenceCounted(false)
+            acquire(60_000L)
+        }
+
         val pendingResult = goAsync()
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getDatabase(context)
+                val db = AppDatabase.getDatabase(appContext)
                 val activeRoutines = db.routineDao().getActiveRoutines()
                     .filter { it.triggerType == TriggerType.BLUETOOTH }
-                val engine = RoutineExecutionEngine(context)
+                val engine = RoutineExecutionEngine(appContext)
 
                 for (routine in activeRoutines) {
                     val config = JSONObject(routine.triggerConfigJson)
@@ -233,12 +287,23 @@ class BluetoothTriggerReceiver : BroadcastReceiver() {
                                 .putLong(lastTriggeredKey, System.currentTimeMillis())
                                 .apply()
                             engine.executeRoutine(routine, "Bluetooth: Connected $deviceName")
+                        } else if (reqConnected && isDisconnected && wasBtConnected) {
+                            // Target device disconnected: ROUTINE HAS ENDED! Restore previous settings
+                            prefs.edit().putBoolean(lastBtStateKey, false).apply()
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Bluetooth Disconnected: $deviceName")
+                            }
                         } else if (!reqConnected && isDisconnected && wasBtConnected && lastTriggeredTime < thirtySecondsAgo) {
                             prefs.edit()
                                 .putBoolean(lastBtStateKey, false)
                                 .putLong(lastTriggeredKey, System.currentTimeMillis())
                                 .apply()
                             engine.executeRoutine(routine, "Bluetooth: Disconnected $deviceName")
+                        } else if (!reqConnected && isConnected && !wasBtConnected) {
+                            prefs.edit().putBoolean(lastBtStateKey, true).apply()
+                            if (routine.restoreOnEnd) {
+                                engine.restoreRoutineSettings(routine, "Bluetooth Reconnected: $deviceName")
+                            }
                         } else if (isDisconnected) {
                             prefs.edit().putBoolean(lastBtStateKey, false).apply()
                         }
@@ -247,6 +312,12 @@ class BluetoothTriggerReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Log.e("BluetoothReceiver", "Error processing bluetooth trigger", e)
             } finally {
+                try {
+                    if (wakeLock?.isHeld == true) wakeLock.release()
+                } catch (e: Throwable) {
+                    // Ignore
+                }
+                com.example.widget.WidgetUpdateHelper.updateAllWidgets(appContext)
                 pendingResult.finish()
             }
         }

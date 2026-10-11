@@ -9,6 +9,9 @@ import com.example.background.RoutineAlarmManager
 import com.example.background.RoutineWorker
 import com.example.shizuku.NetworkStatusMonitor
 import com.example.shizuku.ShizukuManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * RoutineApplication is the custom Application class that initializes WorkManager
@@ -48,9 +51,22 @@ class RoutineApplication : Application(), Configuration.Provider {
         // 3. Initialize background helpers: Shizuku bridge, Network monitor, and precision alarms & geofences
         try {
             ShizukuManager.init()
+            com.example.shizuku.ShizukuPermissionManager.attachApplication(this)
+            com.example.shizuku.ShizukuPermissionManager.reconnectShizuku(force = true)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    com.example.data.repository.RoutineRepository.getInstance(this@RoutineApplication)
+                    if (ShizukuManager.isAuthorized()) {
+                        ShizukuManager.grantNotificationPolicyAccess(this@RoutineApplication.packageName)
+                    }
+                } catch (e: Throwable) {
+                    // Safe background pre-grant
+                }
+            }
             NetworkStatusMonitor.initialize(this)
             RoutineAlarmManager.rescheduleAllRoutines(this)
             com.example.background.GeofenceManager.registerAllGeofences(this)
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(this)
         } catch (e: Throwable) {
             Log.e(TAG, "Error initializing background helpers in RoutineApplication", e)
         }

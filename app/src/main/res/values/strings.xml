@@ -11,4 +11,15 @@
     <string name="if_condition">If</string>
     <string name="then_action">Then</string>
     <string name="save_routine">Save Routine</string>
+    <string name="widget_routines_list_title">Pixel Routines Overview</string>
+    <string name="widget_routines_list_desc">View and toggle all your automation routines directly from your home screen.</string>
+    <string name="widget_single_routine_title">Quick Routine Action</string>
+    <string name="widget_single_routine_desc">Quick toggle and live execution control for a selected routine.</string>
+    <string name="widget_configure_title">Select Routine for Widget</string>
+    <string name="widget_empty_routines">No routines configured yet.</string>
+    <string name="widget_running_status">RUNNING</string>
+    <string name="widget_active_status">ACTIVE</string>
+    <string name="widget_off_status">OFF</string>
+    <string name="widget_turn_on">Turn On</string>
+    <string name="widget_turn_off">Turn Off</string>
 </resources>

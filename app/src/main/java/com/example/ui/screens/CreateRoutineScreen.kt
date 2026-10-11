@@ -44,7 +44,9 @@ fun CreateRoutineScreen(
                 title = {
                     Text(
                         text = if (existingRoutine != null) "Edit Routine" else "New Routine",
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 },
                 navigationIcon = {

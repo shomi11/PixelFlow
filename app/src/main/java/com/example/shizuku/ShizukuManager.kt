@@ -53,12 +53,16 @@ object ShizukuManager {
     }
 
     suspend fun setDarkMode(enabled: Boolean): ShellResult {
-        val cmd = "cmd uimode night ${if (enabled) "yes" else "no"}"
+        val cmd = if (enabled) "cmd uimode night yes || settings put secure ui_night_mode 2" else "cmd uimode night no || settings put secure ui_night_mode 1"
         return executeCommand(cmd)
     }
 
     suspend fun setWifi(enabled: Boolean): ShellResult {
-        val cmd = "svc wifi ${if (enabled) "enable" else "disable"}"
+        val cmd = if (enabled) {
+            "cmd wifi set-wifi-enabled enabled || svc wifi enable || settings put global wifi_on 1"
+        } else {
+            "cmd wifi set-wifi-enabled disabled || svc wifi disable || settings put global wifi_on 0"
+        }
         return executeCommand(cmd)
     }
 
@@ -72,12 +76,16 @@ object ShizukuManager {
     }
 
     suspend fun setBluetooth(enabled: Boolean): ShellResult {
-        val cmd = "cmd bluetooth_manager ${if (enabled) "enable" else "disable"} || svc bluetooth ${if (enabled) "enable" else "disable"}"
+        val cmd = if (enabled) {
+            "cmd bluetooth_manager enable || svc bluetooth enable || settings put global bluetooth_on 1"
+        } else {
+            "cmd bluetooth_manager disable || svc bluetooth disable || settings put global bluetooth_on 0"
+        }
         return executeCommand(cmd)
     }
 
     suspend fun setBatterySaver(enabled: Boolean): ShellResult {
-        val cmd = "cmd power set-mode ${if (enabled) 1 else 0}"
+        val cmd = "cmd power set-mode ${if (enabled) 1 else 0} || settings put global low_power ${if (enabled) 1 else 0}"
         return executeCommand(cmd)
     }
 
@@ -86,31 +94,74 @@ object ShizukuManager {
         return executeCommand(cmd)
     }
 
-    suspend fun setSoundProfile(mode: String, volumePercent: Int = -1): ShellResult {
-        val ringerCode = when (mode.uppercase()) {
-            "SILENT" -> 0
-            "VIBRATE" -> 1
-            "NORMAL", "RING" -> 2
-            else -> 2
-        }
+    suspend fun grantNotificationPolicyAccess(targetPackageName: String = com.example.BuildConfig.APPLICATION_ID): ShellResult {
+        val cmd = "appops set $targetPackageName ACCESS_NOTIFICATION_POLICY allow && " +
+                  "appops set com.aistudio.pixelroutines.pxrtns ACCESS_NOTIFICATION_POLICY allow"
+        return executeCommand(cmd)
+    }
+
+    suspend fun setSoundProfile(
+        mode: String,
+        volumePercent: Int = -1,
+        targetPackageName: String = com.example.BuildConfig.APPLICATION_ID
+    ): ShellResult {
+        val upperMode = mode.uppercase()
 
         val commands = mutableListOf<String>()
-        commands.add("cmd audio set-ringer-mode $ringerCode || settings put global mode_ringer $ringerCode")
 
-        if (ringerCode == 0) {
-            commands.add("settings put global zen_mode 2")
-        } else {
-            commands.add("settings put global zen_mode 0")
-        }
+        // 1. Ensure Do Not Disturb Access is granted to Pixel Routines via AppOps so AudioManager & system APIs work natively
+        commands.add("appops set $targetPackageName ACCESS_NOTIFICATION_POLICY allow || true")
+        commands.add("appops set com.aistudio.pixelroutines.pxrtns ACCESS_NOTIFICATION_POLICY allow || true")
 
-        if (volumePercent in 0..100) {
-            commands.add("cmd media_session volume --stream 3 --set $volumePercent || media volume --stream 3 --set $volumePercent")
-            if (ringerCode == 2) {
-                commands.add("cmd media_session volume --stream 2 --set $volumePercent || media volume --stream 2 --set $volumePercent")
+        // 2. Comprehensive Ringer Mode Command Chain
+        when (upperMode) {
+            "VIBRATE" -> {
+                // Ensure DND / Zen mode is disengaged, set ringer to VIBRATE via AudioService and system settings
+                commands.add("cmd notification set_dnd off || cmd notification set_dnd all || true")
+                commands.add("cmd audio set-ringer-mode VIBRATE || cmd audio set-ringer-mode vibrate || true")
+                commands.add("settings put global mode_ringer 1")
+                commands.add("settings put global zen_mode 0")
+                // Silence ring/notification streams so it won't produce audible ringtones, keeping haptic feedback
+                commands.add(
+                    "cmd media_session volume --stream 2 --set 0 || " +
+                    "media volume --stream 2 --set 0 || true"
+                )
+            }
+            "SILENT" -> {
+                // Set ringer to SILENT and turn on DND
+                commands.add("cmd audio set-ringer-mode SILENT || cmd audio set-ringer-mode silent || true")
+                commands.add("cmd notification set_dnd priority || cmd notification set_dnd on || true")
+                commands.add("settings put global mode_ringer 0")
+                commands.add("settings put global zen_mode 2")
+                commands.add(
+                    "cmd media_session volume --stream 2 --set 0 || " +
+                    "media volume --stream 2 --set 0 || true"
+                )
+            }
+            else -> { // NORMAL / RING
+                // Turn off DND and restore NORMAL ringer mode
+                commands.add("cmd notification set_dnd off || cmd notification set_dnd all || true")
+                commands.add("cmd audio set-ringer-mode NORMAL || cmd audio set-ringer-mode normal || true")
+                commands.add("settings put global mode_ringer 2")
+                commands.add("settings put global zen_mode 0")
             }
         }
 
-        return executeCommand(commands.joinToString(" && "))
+        // 3. Media / Ring Stream Volume Control if specified
+        if (volumePercent in 0..100) {
+            commands.add(
+                "cmd media_session volume --stream 3 --set $volumePercent || " +
+                "media volume --stream 3 --set $volumePercent || true"
+            )
+            if (upperMode != "SILENT" && upperMode != "VIBRATE") {
+                commands.add(
+                    "cmd media_session volume --stream 2 --set $volumePercent || " +
+                    "media volume --stream 2 --set $volumePercent || true"
+                )
+            }
+        }
+
+        return executeCommand(commands.joinToString(" ; "))
     }
 
     suspend fun queryAodStatus(): String {

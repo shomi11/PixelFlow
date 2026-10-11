@@ -40,11 +40,11 @@ private val LightColorScheme = lightColorScheme(
     secondary = PixelAmber,
     onSecondary = Color.White,
     tertiary = PixelGreen,
-    background = Color(0xFFF9F9FE),
+    background = Color(0xFFF8F9FD),
     onBackground = Color(0xFF1B1B1F),
     surface = Color.White,
     onSurface = Color(0xFF1B1B1F),
-    surfaceVariant = Color(0xFFE7E7F0),
+    surfaceVariant = Color(0xFFEFF2F9),
     onSurfaceVariant = Color(0xFF45464F)
 )
 

@@ -664,7 +664,7 @@ fun ShizukuStatusIndicator(
 }
 
 /**
- * Compact pill-shaped chip indicator for placement in app bars or quick headers.
+ * Compact premium pill-shaped chip indicator for placement in app bars or quick headers.
  */
 @Composable
 fun ShizukuStatusChip(
@@ -672,37 +672,65 @@ fun ShizukuStatusChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val (dotColor, label) = when (state) {
-        ShizukuState.AUTHORIZED -> Color(0xFF2E7D32) to "Shizuku Active"
-        ShizukuState.PERMISSION_REQUIRED -> Color(0xFFF57C00) to "Needs Permission"
-        ShizukuState.UNAVAILABLE -> Color(0xFFD32F2F) to "Shizuku Offline"
+    val (dotColor, label, bgTint, icon) = when (state) {
+        ShizukuState.AUTHORIZED -> Quadruple(
+            Color(0xFF1E8E3E),
+            "Shizuku Active",
+            Color(0xFF1E8E3E).copy(alpha = 0.12f),
+            Icons.Default.Check
+        )
+        ShizukuState.PERMISSION_REQUIRED -> Quadruple(
+            Color(0xFFE8710A),
+            "Permission Needed",
+            Color(0xFFE8710A).copy(alpha = 0.15f),
+            Icons.Default.Key
+        )
+        ShizukuState.UNAVAILABLE -> Quadruple(
+            Color(0xFFD93025),
+            "Service Offline",
+            Color(0xFFD93025).copy(alpha = 0.12f),
+            Icons.Default.Warning
+        )
     }
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = dotColor.copy(alpha = 0.12f),
+        shape = CircleShape,
+        color = bgTint,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(CircleShape)
             .clickable { onClick() }
             .testTag("shizuku_status_chip")
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
+            Surface(
+                shape = CircleShape,
+                color = dotColor,
+                modifier = Modifier.size(16.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(7.dp))
             Text(
                 text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = dotColor
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = dotColor,
+                letterSpacing = 0.2.sp
             )
         }
     }
 }
+
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

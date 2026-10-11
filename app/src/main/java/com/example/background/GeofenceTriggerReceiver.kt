@@ -107,11 +107,23 @@ class GeofenceTriggerReceiver : BroadcastReceiver() {
                         if (lastTriggered < tenMinutesAgo && routine.lastExecutedTimestamp < tenMinutesAgo) {
                             prefs.edit().putLong(lastTriggeredKey, System.currentTimeMillis()).apply()
                             val triggerReason = "Geolocation: ${if (currentState == "INSIDE") "Arrived at" else "Departed from"} \"$label\" (${currentDistance.toInt()}m away)"
-                            val engine = RoutineExecutionEngine(context)
+                            val appContext = context.applicationContext
+                            val engine = RoutineExecutionEngine(appContext)
                             val success = engine.executeRoutine(routine, triggerReason)
                             Log.i(TAG, "Geofence routine \"${routine.name}\" executed successfully: $success")
                         } else {
                             Log.i(TAG, "Geofence routine \"${routine.name}\" suppressed due to debounce window")
+                        }
+                    } else if (routine.restoreOnEnd) {
+                        // Check if boundary crossing ended the routine condition
+                        val conditionEnded = (requiredTransition == "ENTER" && transitionedToOutside) ||
+                                (requiredTransition == "EXIT" && transitionedToInside)
+                        if (conditionEnded) {
+                            val appContext = context.applicationContext
+                            val engine = RoutineExecutionEngine(appContext)
+                            val endReason = "Geolocation: ${if (transitionedToOutside) "Departed from" else "Returned to"} \"$label\""
+                            engine.restoreRoutineSettings(routine, endReason)
+                            Log.i(TAG, "Geofence routine \"${routine.name}\" condition ended. Restored previous settings.")
                         }
                     } else {
                         Log.d(TAG, "Geofence state stable ($lastState -> $currentState, required: $requiredTransition), skipping.")
@@ -130,6 +142,7 @@ class GeofenceTriggerReceiver : BroadcastReceiver() {
                 } catch (e: Throwable) {
                     Log.w(TAG, "Error releasing wake lock", e)
                 }
+                com.example.widget.WidgetUpdateHelper.updateAllWidgets(context)
                 pendingResult.finish()
             }
         }

@@ -212,6 +212,16 @@ object ShizukuPermissionManager : Shizuku.OnRequestPermissionResultListener {
 
         // Synchronize with ShizukuServiceHelper state
         ShizukuServiceHelper.checkBindingAndPermission()
+
+        if (granted) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    ShizukuManager.grantNotificationPolicyAccess()
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Error auto-granting notification policy after Shizuku auth", e)
+                }
+            }
+        }
     }
 
     /**
