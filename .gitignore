@@ -1,0 +1,24 @@
+# Gradle & build output
+.gradle/
+.kotlin/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.DS_Store
+local.properties
+
+# Secrets (keep the *.example templates)
+.env
+**/.env
+!.env.example
+!**/.env.example
+
+# Signing keys
+*.jks
+*.keystore
+keystore.properties

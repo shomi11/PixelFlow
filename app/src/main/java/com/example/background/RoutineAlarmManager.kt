@@ -42,6 +42,25 @@ object RoutineAlarmManager {
     const val EXTRA_NOTIF_ICON = "extra_notif_icon"
     const val EXTRA_NOTIF_SCHEDULE_TYPE = "extra_notif_schedule_type"
     const val EXTRA_NOTIF_TIME = "extra_notif_time"
+    const val EXTRA_NOTIF_INDEX = "extra_notif_index"
+
+    /** A routine can hold several timed notifications; each gets its own alarm slot. */
+    private const val MAX_CUSTOM_NOTIFICATIONS_PER_ROUTINE = 10
+    private const val CUSTOM_NOTIF_PREFS = "custom_notification_alarms"
+
+    private fun customNotificationRequestCode(routineId: Long, index: Int): Int =
+        300000 + ((routineId.coerceAtLeast(0L) % 4000L).toInt() * MAX_CUSTOM_NOTIFICATIONS_PER_ROUTINE) + index
+
+    /** Identifies one "Once" notification so it isn't re-armed for the next day after it fired. */
+    fun customNotificationOnceKey(routineId: Long, index: Int, title: String, time: String): String =
+        "once_done_${routineId}_${index}_${(title + "|" + time).hashCode()}"
+
+    fun markCustomNotificationOnceDone(context: Context, key: String) {
+        context.getSharedPreferences(CUSTOM_NOTIF_PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, true).apply()
+    }
+
+    private fun isCustomNotificationOnceDone(context: Context, key: String): Boolean =
+        context.getSharedPreferences(CUSTOM_NOTIF_PREFS, Context.MODE_PRIVATE).getBoolean(key, false)
 
     /**
      * Checks if exact alarm scheduling is permitted by the system.
@@ -277,7 +296,8 @@ object RoutineAlarmManager {
         message: String,
         iconName: String,
         scheduleType: String,
-        time: String
+        time: String,
+        index: Int = 0
     ) {
         val targetMillis = calculateNextDailyTimeMillis(time)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
@@ -290,9 +310,10 @@ object RoutineAlarmManager {
             putExtra(EXTRA_NOTIF_ICON, iconName)
             putExtra(EXTRA_NOTIF_SCHEDULE_TYPE, scheduleType)
             putExtra(EXTRA_NOTIF_TIME, time)
+            putExtra(EXTRA_NOTIF_INDEX, index)
         }
 
-        val requestCode = 300000 + (routineId.coerceAtLeast(1L) % 50000).toInt()
+        val requestCode = customNotificationRequestCode(routineId, index)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,
@@ -305,7 +326,7 @@ object RoutineAlarmManager {
         }
         val showPendingIntent = PendingIntent.getActivity(
             context,
-            requestCode + 10000,
+            requestCode,
             showIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -331,17 +352,20 @@ object RoutineAlarmManager {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val intent = Intent(context, RoutineAlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_CUSTOM_NOTIFICATION
-            putExtra(EXTRA_ROUTINE_ID, routineId)
         }
-        val requestCode = 300000 + (routineId.coerceAtLeast(1L) % 50000).toInt()
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
-        pendingIntent.cancel()
+        // Current per-action slots, plus the single slot used by earlier versions of the app
+        val requestCodes = (0 until MAX_CUSTOM_NOTIFICATIONS_PER_ROUTINE).map { customNotificationRequestCode(routineId, it) } +
+            (300000 + (routineId.coerceAtLeast(1L) % 50000).toInt())
+        for (requestCode in requestCodes.distinct()) {
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            ) ?: continue
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
     }
 
     fun scheduleRoutineCustomNotifications(context: Context, routine: Routine) {
@@ -349,22 +373,28 @@ object RoutineAlarmManager {
             cancelCustomNotificationAlarm(context, routine.id)
             return
         }
+        // Clear slots of notifications that were removed or edited before re-arming the current ones
+        cancelCustomNotificationAlarm(context, routine.id)
         val actions = routine.actions.ifEmpty { routine.parseActions() }
-        for (action in actions) {
-            if (action.type == ActionType.CUSTOM_NOTIFICATION && action.enabledState) {
-                val cfg = CustomNotificationConfig.fromJsonString(action.stringValue)
-                if (cfg.scheduleType == "ONCE" || cfg.scheduleType == "DAILY") {
-                    scheduleCustomNotificationAlarm(
-                        context = context,
-                        routineId = routine.id,
-                        title = cfg.title,
-                        message = cfg.message,
-                        iconName = cfg.iconName,
-                        scheduleType = cfg.scheduleType,
-                        time = cfg.time
-                    )
-                }
+        val timed = actions.filter { it.type == ActionType.CUSTOM_NOTIFICATION && it.enabledState }
+            .map { CustomNotificationConfig.fromJsonString(it.stringValue) }
+            .filter { it.scheduleType == "ONCE" || it.scheduleType == "DAILY" }
+        timed.take(MAX_CUSTOM_NOTIFICATIONS_PER_ROUTINE).forEachIndexed { index, cfg ->
+            if (cfg.scheduleType == "ONCE" &&
+                isCustomNotificationOnceDone(context, customNotificationOnceKey(routine.id, index, cfg.title, cfg.time))
+            ) {
+                return@forEachIndexed
             }
+            scheduleCustomNotificationAlarm(
+                context = context,
+                routineId = routine.id,
+                title = cfg.title,
+                message = cfg.message,
+                iconName = cfg.iconName,
+                scheduleType = cfg.scheduleType,
+                time = cfg.time,
+                index = index
+            )
         }
     }
 

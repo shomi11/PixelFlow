@@ -9,7 +9,6 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -20,6 +19,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Needed for the "App opened" trigger. Granted by the user in Usage access settings or via Shizuku. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
     <queries>
@@ -80,6 +85,10 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -94,25 +103,18 @@
             </intent-filter>
         </receiver>
 
-        <receiver
-            android:name=".background.BatteryTriggerReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-                <action android:name="android.intent.action.BATTERY_LOW" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".background.WifiTriggerReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.net.wifi.STATE_CHANGE" />
-            </intent-filter>
-        </receiver>
+        <!--
+            Battery, Wi-Fi and "App opened" triggers. Android 8+ no longer delivers those broadcasts
+            to manifest receivers, so this service listens for them while such routines are enabled.
+        -->
+        <service
+            android:name=".background.TriggerMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs user-created automation routines when the device's Wi-Fi network, charging state, battery level or foreground app changes." />
+        </service>
 
         <receiver
             android:name=".background.BluetoothTriggerReceiver"
@@ -141,15 +143,16 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.example.ACTION_WIDGET_RUN_ROUTINE" />
-                <action android:name="com.example.ACTION_WIDGET_STOP_ROUTINE" />
-                <action android:name="com.example.ACTION_WIDGET_REFRESH" />
-                <action android:name="com.example.ACTION_OPEN_ROUTINE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_routines_list_info" />
         </receiver>
+
+        <!-- Run / stop / open taps from both widgets. Not exported: only this app's PendingIntents can reach it. -->
+        <receiver
+            android:name=".widget.WidgetActionReceiver"
+            android:exported="false" />
 
         <!-- RemoteViews Service for List Widget -->
         <service
@@ -164,8 +167,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.example.ACTION_SINGLE_WIDGET_RUN_ROUTINE" />
-                <action android:name="com.example.ACTION_SINGLE_WIDGET_STOP_ROUTINE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

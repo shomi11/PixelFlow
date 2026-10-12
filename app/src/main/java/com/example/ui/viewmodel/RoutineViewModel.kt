@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.background.RoutineAlarmManager
+import com.example.background.TriggerMonitorService
 import com.example.background.WorkManagerHelper
 import com.example.data.local.AppDatabase
 import com.example.data.model.Routine
@@ -177,13 +178,17 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 } else if (routine.triggerType == TriggerType.LOCATION) {
                     com.example.background.GeofenceManager.registerGeofence(getApplication(), routine.copy(isEnabled = true))
                 }
+                RoutineAlarmManager.scheduleRoutineCustomNotifications(getApplication(), routine.copy(isEnabled = true))
             } else {
                 RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
+                RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routine.id)
                 com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
                 if (routine.restoreOnEnd && com.example.service.RoutineStateSnapshotManager.hasSnapshot(getApplication(), routine.id)) {
                     executionEngine.restoreRoutineSettings(routine, "Routine Disabled")
                 }
             }
+            TriggerMonitorService.refresh(getApplication())
+            com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine \"${routine.title}\" ${if (newState) "enabled" else "disabled"}")
         }
     }
@@ -211,6 +216,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             }
             _userMessage.emit("Routine ${if (isEnabled) "enabled" else "disabled"}")
+            TriggerMonitorService.refresh(getApplication())
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
         }
     }
@@ -237,6 +243,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routine.id)
             com.example.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
             repository.deleteRoutine(routine)
+            TriggerMonitorService.refresh(getApplication())
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine \"${routine.title}\" deleted")
         }
@@ -248,6 +255,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routineId)
             com.example.background.GeofenceManager.removeGeofence(getApplication(), routineId)
             repository.deleteRoutineById(routineId)
+            TriggerMonitorService.refresh(getApplication())
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine deleted")
         }
@@ -277,6 +285,7 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             } else {
                 RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), savedRoutine.id)
             }
+            TriggerMonitorService.refresh(getApplication())
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
             onComplete()
         }
@@ -311,6 +320,18 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val result = ShizukuManager.executeCommand(cmd)
             _consoleOutput.value = result
+        }
+    }
+
+    /**
+     * Grants usage access (for "App opened" routines) through Shizuku and reports whether it worked.
+     */
+    fun grantUsageAccessViaShizuku(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val granted = com.example.util.SpecialAccessHelper.grantUsageAccessViaShizuku(getApplication())
+            _userMessage.emit(if (granted) "Usage access granted" else "Couldn't grant usage access automatically")
+            if (granted) TriggerMonitorService.refresh(getApplication())
+            onResult(granted)
         }
     }
 

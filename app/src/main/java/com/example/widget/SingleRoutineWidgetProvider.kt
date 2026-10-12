@@ -6,19 +6,17 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.os.PowerManager
 import android.util.Log
 import android.widget.RemoteViews
 import com.example.MainActivity
 import com.example.R
 import com.example.data.local.AppDatabase
 import com.example.data.model.Routine
-import com.example.service.RoutineExecutionEngine
 import com.example.service.RoutineExecutionTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class SingleRoutineWidgetProvider : AppWidgetProvider() {
 
@@ -27,9 +25,7 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
         const val PREFS_NAME = "single_routine_widget_prefs"
         const val PREF_PREFIX_KEY = "appwidget_routine_"
 
-        const val ACTION_WIDGET_RUN_ROUTINE = "com.example.ACTION_SINGLE_WIDGET_RUN_ROUTINE"
-        const val ACTION_WIDGET_STOP_ROUTINE = "com.example.ACTION_SINGLE_WIDGET_STOP_ROUTINE"
-        const val EXTRA_ROUTINE_ID = "extra_routine_id"
+        const val EXTRA_ROUTINE_ID = WidgetActionReceiver.EXTRA_ROUTINE_ID
 
         fun saveRoutinePref(context: Context, appWidgetId: Int, routineId: Long) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -43,6 +39,15 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
                 .getLong(PREF_PREFIX_KEY + appWidgetId, -1L)
         }
 
+        private fun widgetActionIntent(context: Context, action: String, routineId: Long, appWidgetId: Int): Intent {
+            return Intent(context, WidgetActionReceiver::class.java).apply {
+                this.action = action
+                putExtra(WidgetActionReceiver.EXTRA_ROUTINE_ID, routineId)
+                putExtra(WidgetActionReceiver.EXTRA_SOURCE, "Quick Control Widget")
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+            }
+        }
+
         fun deleteRoutinePref(context: Context, appWidgetId: Int) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit()
@@ -50,10 +55,23 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
                 .apply()
         }
 
+        /**
+         * Fire-and-forget refresh for callers on the main thread (e.g. the configure activity).
+         */
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
+            val appContext = context.applicationContext
+            CoroutineScope(Dispatchers.IO).launch {
+                updateAppWidgetNow(appContext, appWidgetManager, appWidgetId)
+            }
+        }
+
+        /**
+         * Loads the routine off the main thread and pushes the RemoteViews.
+         */
+        suspend fun updateAppWidgetNow(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             var routineId = loadRoutinePref(context, appWidgetId)
 
-            val routine: Routine? = runBlocking(Dispatchers.IO) {
+            val routine: Routine? = withContext(Dispatchers.IO) {
                 try {
                     val repo = com.example.data.repository.RoutineRepository.getInstance(context)
                     if (routineId > 0) {
@@ -97,11 +115,7 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.single_widget_btn_action, "TURN OFF / STOP")
                     views.setInt(R.id.single_widget_btn_action, "setBackgroundResource", R.drawable.widget_btn_stop_bg)
 
-                    val stopIntent = Intent(context, SingleRoutineWidgetProvider::class.java).apply {
-                        action = ACTION_WIDGET_STOP_ROUTINE
-                        putExtra(EXTRA_ROUTINE_ID, routine.id)
-                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                    }
+                    val stopIntent = widgetActionIntent(context, WidgetActionReceiver.ACTION_STOP_ROUTINE, routine.id, appWidgetId)
                     val stopPendingIntent = PendingIntent.getBroadcast(
                         context,
                         (appWidgetId * 100) + 1,
@@ -117,11 +131,7 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.single_widget_btn_action, "TURN ON / RUN")
                     views.setInt(R.id.single_widget_btn_action, "setBackgroundResource", R.drawable.widget_btn_run_bg)
 
-                    val runIntent = Intent(context, SingleRoutineWidgetProvider::class.java).apply {
-                        action = ACTION_WIDGET_RUN_ROUTINE
-                        putExtra(EXTRA_ROUTINE_ID, routine.id)
-                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                    }
+                    val runIntent = widgetActionIntent(context, WidgetActionReceiver.ACTION_RUN_ROUTINE, routine.id, appWidgetId)
                     val runPendingIntent = PendingIntent.getBroadcast(
                         context,
                         (appWidgetId * 100) + 2,
@@ -137,11 +147,7 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.single_widget_btn_action, "ENABLE & RUN")
                     views.setInt(R.id.single_widget_btn_action, "setBackgroundResource", R.drawable.widget_btn_run_bg)
 
-                    val runIntent = Intent(context, SingleRoutineWidgetProvider::class.java).apply {
-                        action = ACTION_WIDGET_RUN_ROUTINE
-                        putExtra(EXTRA_ROUTINE_ID, routine.id)
-                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                    }
+                    val runIntent = widgetActionIntent(context, WidgetActionReceiver.ACTION_RUN_ROUTINE, routine.id, appWidgetId)
                     val runPendingIntent = PendingIntent.getBroadcast(
                         context,
                         (appWidgetId * 100) + 3,
@@ -191,10 +197,20 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        for (appWidgetId in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, appWidgetId)
+        // Database reads must not block the main thread, so finish the broadcast asynchronously.
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                for (appWidgetId in appWidgetIds) {
+                    updateAppWidgetNow(appContext, appWidgetManager, appWidgetId)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating quick control widgets", e)
+            } finally {
+                pendingResult.finish()
+            }
         }
-        super.onUpdate(context, appWidgetManager, appWidgetIds)
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
@@ -202,77 +218,5 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
             deleteRoutinePref(context, appWidgetId)
         }
         super.onDeleted(context, appWidgetIds)
-    }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        val action = intent.action ?: return
-
-        when (action) {
-            ACTION_WIDGET_RUN_ROUTINE -> {
-                val routineId = intent.getLongExtra(EXTRA_ROUTINE_ID, -1L)
-                val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-                if (routineId > 0) {
-                    executeRoutineAsync(context, routineId, appWidgetId)
-                }
-            }
-            ACTION_WIDGET_STOP_ROUTINE -> {
-                val routineId = intent.getLongExtra(EXTRA_ROUTINE_ID, -1L)
-                val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-                if (routineId > 0) {
-                    stopRoutineAsync(context, routineId, appWidgetId)
-                }
-            }
-        }
-    }
-
-    private fun executeRoutineAsync(context: Context, routineId: Long, appWidgetId: Int) {
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-        val wakeLock = powerManager?.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "PixelRoutines:SingleWidgetRunWakeLock"
-        )?.apply {
-            setReferenceCounted(false)
-            acquire(60_000L)
-        }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val db = AppDatabase.getDatabase(context)
-                val routine = db.routineDao().getRoutineById(routineId)
-                if (routine != null) {
-                    val engine = RoutineExecutionEngine(context.applicationContext)
-                    engine.executeRoutine(routine, "Single Widget Quick Run")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error executing routine from single widget", e)
-            } finally {
-                try {
-                    if (wakeLock?.isHeld == true) wakeLock.release()
-                } catch (e: Throwable) {
-                    // Ignore
-                }
-                WidgetUpdateHelper.updateAllWidgets(context)
-            }
-        }
-    }
-
-    private fun stopRoutineAsync(context: Context, routineId: Long, appWidgetId: Int) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val db = AppDatabase.getDatabase(context)
-                val routine = db.routineDao().getRoutineById(routineId)
-                if (routine != null) {
-                    val engine = RoutineExecutionEngine(context.applicationContext)
-                    engine.restoreRoutineSettings(routine, "Stopped via Quick Control Widget")
-                }
-                RoutineExecutionTracker.markFinished(routineId)
-                db.routineDao().updateExecutionStatus(routineId, System.currentTimeMillis(), "IDLE")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping routine from single widget", e)
-            } finally {
-                WidgetUpdateHelper.updateAllWidgets(context)
-            }
-        }
     }
 }

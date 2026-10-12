@@ -13,7 +13,7 @@ import com.example.data.model.RoutineExecutionLog
 @Database(
     entities = [Routine::class, RoutineExecutionLog::class],
     version = 3,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -38,7 +38,9 @@ abstract class AppDatabase : RoomDatabase() {
                     "pixel_routines_database"
                 )
                     .addMigrations(MIGRATION_2_3)
-                    .fallbackToDestructiveMigration()
+                    // Only the pre-release v1 schema has no migration path. Every later version
+                    // must ship a Migration so user routines are never silently wiped.
+                    .fallbackToDestructiveMigrationFrom(true, 1)
                     .build()
                 INSTANCE = instance
                 instance

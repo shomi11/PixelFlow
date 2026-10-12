@@ -6,9 +6,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import rikka.shizuku.Shizuku
 import java.io.BufferedReader
+import java.util.concurrent.TimeUnit
 
 /**
  * ShizukuServiceHelper is a singleton object that manages Shizuku binding state,
@@ -38,6 +42,7 @@ object ShizukuServiceHelper {
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         Log.i(TAG, "Shizuku binder connected")
         _isBinderAlive.value = true
+        lastUnavailableAt = 0L
         checkBindingAndPermission()
     }
 
@@ -267,10 +272,14 @@ object ShizukuServiceHelper {
      * @return ShellResult containing exitCode, stdout, stderr, executedCommand, and isSuccess.
      */
     suspend fun executeCommand(command: String): ShellResult = withContext(Dispatchers.IO) {
-        // 1. Fast check or wait up to 3s for Shizuku binder to connect in background
+        // 1. Fast check; wait for the binder only if Shizuku wasn't just found to be unavailable,
+        // so a routine with several actions doesn't stall for seconds on every command.
         var isAuthorized = checkPermission() && Shizuku.pingBinder()
-        if (!isAuthorized) {
+        if (!isAuthorized && System.currentTimeMillis() - lastUnavailableAt > UNAVAILABLE_BACKOFF_MS) {
             isAuthorized = ensureAuthorized(3000L)
+        }
+        if (!isAuthorized) {
+            lastUnavailableAt = System.currentTimeMillis()
         }
 
         if (isAuthorized) {
@@ -283,18 +292,7 @@ object ShizukuServiceHelper {
                     String::class.java
                 ).apply { isAccessible = true }
                 val process = newProcessMethod.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
-
-                val stdout = process.inputStream.bufferedReader().use { it.readText() }.trim()
-                val stderr = process.errorStream.bufferedReader().use { it.readText() }.trim()
-                val exitCode = process.waitFor()
-
-                return@withContext ShellResult(
-                    exitCode = exitCode,
-                    stdout = stdout,
-                    stderr = stderr,
-                    executedCommand = command,
-                    isSuccess = exitCode == 0
-                )
+                return@withContext collectProcess(process, command)
             } catch (e: Throwable) {
                 Log.e(TAG, "Exception while executing Shizuku command: $command", e)
             }
@@ -317,26 +315,60 @@ object ShizukuServiceHelper {
         )
     }
 
-    private fun executeViaRoot(command: String): ShellResult? {
+    private suspend fun executeViaRoot(command: String): ShellResult? {
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
-            val stdout = process.inputStream.bufferedReader().use { it.readText() }.trim()
-            val stderr = process.errorStream.bufferedReader().use { it.readText() }.trim()
-            val exitCode = process.waitFor()
-            if (exitCode == 0 || stdout.isNotBlank()) {
+            val result = collectProcess(process, "su -c $command")
+            if (result.exitCode == 0 || result.stdout.isNotBlank()) {
                 Log.i(TAG, "Executed command successfully via root 'su': $command")
-                ShellResult(
-                    exitCode = exitCode,
-                    stdout = stdout,
-                    stderr = stderr,
-                    executedCommand = "su -c $command",
-                    isSuccess = exitCode == 0
-                )
+                result
             } else {
                 null
             }
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** Time after a failed connection during which commands fail fast instead of waiting again. */
+    private const val UNAVAILABLE_BACKOFF_MS = 15_000L
+
+    /** Upper bound for one shell command; system "cmd" calls normally finish in well under a second. */
+    private const val COMMAND_TIMEOUT_SECONDS = 20L
+
+    @Volatile
+    private var lastUnavailableAt = 0L
+
+    /**
+     * Reads stdout and stderr in parallel (reading one after the other can deadlock once the other
+     * pipe's buffer fills) and kills the process if it runs longer than [COMMAND_TIMEOUT_SECONDS].
+     */
+    private suspend fun collectProcess(process: Process, command: String): ShellResult = coroutineScope {
+        val stdoutJob = async(Dispatchers.IO) {
+            try { process.inputStream.bufferedReader().use { it.readText() }.trim() } catch (e: Exception) { "" }
+        }
+        val stderrJob = async(Dispatchers.IO) {
+            try { process.errorStream.bufferedReader().use { it.readText() }.trim() } catch (e: Exception) { "" }
+        }
+        // Blocking waitFor() in its own job: Shizuku's remote process doesn't reliably support the
+        // timed waitFor(long, TimeUnit) overload. destroy() unblocks it on timeout.
+        val exitJob = async(Dispatchers.IO) { process.waitFor() }
+        val exitValue = withTimeoutOrNull(TimeUnit.SECONDS.toMillis(COMMAND_TIMEOUT_SECONDS)) { exitJob.await() }
+        val finished = exitValue != null
+        if (!finished) {
+            Log.w(TAG, "Command timed out after ${COMMAND_TIMEOUT_SECONDS}s: $command")
+            try { process.destroy() } catch (e: Exception) { /* already gone */ }
+            exitJob.cancel()
+        }
+        val stdout = stdoutJob.await()
+        val stderr = stderrJob.await()
+        val exitCode = exitValue ?: 124
+        ShellResult(
+            exitCode = exitCode,
+            stdout = stdout,
+            stderr = if (finished) stderr else "Timed out after ${COMMAND_TIMEOUT_SECONDS}s. $stderr".trim(),
+            executedCommand = command,
+            isSuccess = exitCode == 0
+        )
     }
 }

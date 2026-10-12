@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         try {
             ShizukuPermissionManager.onAppResumed()
+            // The app is in the foreground here, so Android always allows starting the trigger service
+            com.example.background.TriggerMonitorService.refresh(this)
         } catch (e: Throwable) {
             android.util.Log.e("MainActivity", "Error checking Shizuku on resume", e)
         }

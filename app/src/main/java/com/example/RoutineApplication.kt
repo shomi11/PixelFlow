@@ -66,6 +66,7 @@ class RoutineApplication : Application(), Configuration.Provider {
             NetworkStatusMonitor.initialize(this)
             RoutineAlarmManager.rescheduleAllRoutines(this)
             com.example.background.GeofenceManager.registerAllGeofences(this)
+            com.example.background.TriggerMonitorService.refresh(this)
             com.example.widget.WidgetUpdateHelper.updateAllWidgets(this)
         } catch (e: Throwable) {
             Log.e(TAG, "Error initializing background helpers in RoutineApplication", e)

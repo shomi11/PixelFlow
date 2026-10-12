@@ -156,6 +156,8 @@ class RoutineWorker(
         try {
             // Verify and maintain exact AlarmManager alarms for scheduled, sunrise, and sunset routines
             RoutineAlarmManager.rescheduleAllRoutines(appContext)
+            // Restart the trigger monitor if the system killed it (may be refused in the background)
+            TriggerMonitorService.refresh(appContext)
         } catch (e: Exception) {
             Log.e(TAG, "Error performing background scheduler maintenance in RoutineWorker", e)
         }

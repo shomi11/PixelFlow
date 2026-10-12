@@ -4,10 +4,6 @@ import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.NetworkInfo
-import android.net.wifi.WifiInfo
-import android.net.wifi.WifiManager
-import android.os.BatteryManager
 import android.util.Log
 import com.example.data.local.AppDatabase
 import com.example.data.model.TriggerType
@@ -17,207 +13,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+/**
+ * Re-arms everything the system forgets: alarms and geofences are cleared on reboot, alarm times
+ * shift when the clock or time zone changes, and exact alarms are re-allowed when the user grants
+ * "Alarms & reminders". Also the only background moments where Android 12+ lets us start the
+ * trigger monitor service without the app being opened.
+ */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
-            intent.action == "android.intent.action.QUICKBOOT_POWERON"
-        ) {
-            Log.d("BootReceiver", "Device rebooted. Setting up routine background worker and precision alarms.")
-            WorkManagerHelper.setupPeriodicMonitoring(context)
-            RoutineAlarmManager.rescheduleAllRoutines(context)
-            GeofenceManager.registerAllGeofences(context)
-        }
-    }
-}
-
-class BatteryTriggerReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action ?: return
-        val isPowerConnected = action == Intent.ACTION_POWER_CONNECTED
-        val isPowerDisconnected = action == Intent.ACTION_POWER_DISCONNECTED
-        val isBatteryLow = action == Intent.ACTION_BATTERY_LOW
-
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val batteryPct = if (level != -1 && scale != -1) {
-            (level * 100 / scale.toFloat()).toInt()
-        } else {
-            val batteryStatus = context.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-            val bLevel = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-            val bScale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-            if (bLevel != -1 && bScale != -1) (bLevel * 100 / bScale.toFloat()).toInt() else -1
-        }
-
-        val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
-
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-        val wakeLock = powerManager?.newWakeLock(
-            android.os.PowerManager.PARTIAL_WAKE_LOCK,
-            "PixelRoutines:BatteryTriggerWakeLock"
-        )?.apply {
-            setReferenceCounted(false)
-            acquire(60_000L)
-        }
-
-        val pendingResult = goAsync()
-        val appContext = context.applicationContext
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val db = AppDatabase.getDatabase(appContext)
-                val activeRoutines = db.routineDao().getActiveRoutines()
-                    .filter { it.triggerType == TriggerType.BATTERY }
-                val engine = RoutineExecutionEngine(appContext)
-
-                for (routine in activeRoutines) {
-                    val config = JSONObject(routine.triggerConfigJson)
-                    val reqCharging = config.optBoolean("charging", false)
-                    val targetLevel = config.optInt("level", 20)
-
-                    val lastChargedKey = "last_charging_${routine.id}"
-                    val lastTriggeredKey = "last_battery_triggered_${routine.id}"
-                    val wasCharging = prefs.getBoolean(lastChargedKey, false)
-
-                    if (reqCharging) {
-                        // Only trigger when charger is plugged in (transition from unplugged to plugged)
-                        if (isPowerConnected && !wasCharging) {
-                            prefs.edit().putBoolean(lastChargedKey, true).apply()
-                            engine.executeRoutine(routine, "Charging Connected")
-                        } else if (isPowerDisconnected && wasCharging) {
-                            prefs.edit().putBoolean(lastChargedKey, false).apply()
-                            if (routine.restoreOnEnd) {
-                                engine.restoreRoutineSettings(routine, "Charging Disconnected")
-                            }
-                        }
-                    } else {
-                        // Battery level trigger: only trigger on transition below target level
-                        val oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000L)
-                        val lastTriggeredTime = prefs.getLong(lastTriggeredKey, 0L)
-                        val wasLowKey = "battery_was_low_${routine.id}"
-                        val wasLow = prefs.getBoolean(wasLowKey, false)
-
-                        val isBelowThreshold = batteryPct in 1..targetLevel
-                        if (isBelowThreshold && !isPowerConnected && !wasLow && lastTriggeredTime < oneHourAgo) {
-                            prefs.edit()
-                                .putBoolean(wasLowKey, true)
-                                .putLong(lastTriggeredKey, System.currentTimeMillis())
-                                .apply()
-                            engine.executeRoutine(routine, "Battery Low ($batteryPct%)")
-                        } else if (batteryPct > targetLevel + 5 && wasLow) {
-                            // Reset threshold trigger when battery charges back above target + 5%
-                            prefs.edit().putBoolean(wasLowKey, false).putLong(lastTriggeredKey, 0L).apply()
-                            if (routine.restoreOnEnd) {
-                                engine.restoreRoutineSettings(routine, "Battery Recharged to $batteryPct%")
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("BatteryTriggerReceiver", "Error evaluating battery triggers", e)
-            } finally {
-                try {
-                    if (wakeLock?.isHeld == true) wakeLock.release()
-                } catch (e: Throwable) {
-                    // Ignore
-                }
-                com.example.widget.WidgetUpdateHelper.updateAllWidgets(appContext)
-                pendingResult.finish()
-            }
-        }
-    }
-}
-
-class WifiTriggerReceiver : BroadcastReceiver() {
-    @Suppress("DEPRECATION")
-    override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action ?: return
-        if (action != WifiManager.NETWORK_STATE_CHANGED_ACTION) return
-
-        val networkInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO, NetworkInfo::class.java)
-        } else {
-            intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO)
-        }
-        val isConnected = networkInfo?.isConnected == true
-
-        val wifiInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(WifiManager.EXTRA_WIFI_INFO, WifiInfo::class.java)
-        } else {
-            intent.getParcelableExtra(WifiManager.EXTRA_WIFI_INFO)
-        }
-        val currentSsid = wifiInfo?.ssid?.trim('"') ?: ""
-
-        val prefs = context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE)
-
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
-        val wakeLock = powerManager?.newWakeLock(
-            android.os.PowerManager.PARTIAL_WAKE_LOCK,
-            "PixelRoutines:WifiTriggerWakeLock"
-        )?.apply {
-            setReferenceCounted(false)
-            acquire(60_000L)
-        }
-
-        val pendingResult = goAsync()
-        val appContext = context.applicationContext
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val db = AppDatabase.getDatabase(appContext)
-                val activeRoutines = db.routineDao().getActiveRoutines()
-                    .filter { it.triggerType == TriggerType.WIFI }
-                val engine = RoutineExecutionEngine(appContext)
-
-                for (routine in activeRoutines) {
-                    val config = JSONObject(routine.triggerConfigJson)
-                    val reqConnected = config.optBoolean("connected", true)
-                    val targetSsid = config.optString("ssid", "").trim('"')
-
-                    val lastStateKey = "wifi_last_connected_${routine.id}"
-                    val lastSsidKey = "wifi_last_ssid_${routine.id}"
-                    val wasConnected = prefs.getBoolean(lastStateKey, false)
-                    val lastSsid = prefs.getString(lastSsidKey, "") ?: ""
-
-                    // Check if target SSID matches
-                    val isTargetNetwork = targetSsid.isBlank() ||
-                            targetSsid.equals("Any Network", ignoreCase = true) ||
-                            currentSsid.equals(targetSsid, ignoreCase = true)
-
-                    if (reqConnected) {
-                        // Trigger only when transitioning from disconnected to connected on target network
-                        if (isConnected && isTargetNetwork && (!wasConnected || lastSsid != currentSsid)) {
-                            prefs.edit()
-                                .putBoolean(lastStateKey, true)
-                                .putString(lastSsidKey, currentSsid)
-                                .apply()
-                            engine.executeRoutine(routine, "Wi-Fi: Connected to $currentSsid")
-                        } else if (!isConnected && wasConnected) {
-                            prefs.edit().putBoolean(lastStateKey, false).putString(lastSsidKey, "").apply()
-                            if (routine.restoreOnEnd) {
-                                engine.restoreRoutineSettings(routine, "Wi-Fi: Disconnected from $lastSsid")
-                            }
-                        }
-                    } else {
-                        // Disconnect trigger: only when transitioning from connected to disconnected
-                        if (!isConnected && wasConnected) {
-                            prefs.edit().putBoolean(lastStateKey, false).apply()
-                            engine.executeRoutine(routine, "Wi-Fi: Disconnected")
-                        } else if (isConnected && !wasConnected) {
-                            prefs.edit().putBoolean(lastStateKey, true).putString(lastSsidKey, currentSsid).apply()
-                            if (routine.restoreOnEnd) {
-                                engine.restoreRoutineSettings(routine, "Wi-Fi: Reconnected to $currentSsid")
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("WifiTriggerReceiver", "Error processing wifi trigger", e)
-            } finally {
-                try {
-                    if (wakeLock?.isHeld == true) wakeLock.release()
-                } catch (e: Throwable) {
-                    // Ignore
-                }
-                com.example.widget.WidgetUpdateHelper.updateAllWidgets(appContext)
-                pendingResult.finish()
+        when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" -> {
+                Log.d("BootReceiver", "Rescheduling routines after ${intent.action}")
+                WorkManagerHelper.setupPeriodicMonitoring(context)
+                RoutineAlarmManager.rescheduleAllRoutines(context)
+                GeofenceManager.registerAllGeofences(context)
+                TriggerMonitorService.refresh(context)
             }
         }
     }

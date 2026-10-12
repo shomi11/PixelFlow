@@ -95,8 +95,7 @@ object ShizukuManager {
     }
 
     suspend fun grantNotificationPolicyAccess(targetPackageName: String = com.example.BuildConfig.APPLICATION_ID): ShellResult {
-        val cmd = "appops set $targetPackageName ACCESS_NOTIFICATION_POLICY allow && " +
-                  "appops set com.aistudio.pixelroutines.pxrtns ACCESS_NOTIFICATION_POLICY allow"
+        val cmd = "appops set $targetPackageName ACCESS_NOTIFICATION_POLICY allow"
         return executeCommand(cmd)
     }
 
@@ -111,7 +110,6 @@ object ShizukuManager {
 
         // 1. Ensure Do Not Disturb Access is granted to Pixel Routines via AppOps so AudioManager & system APIs work natively
         commands.add("appops set $targetPackageName ACCESS_NOTIFICATION_POLICY allow || true")
-        commands.add("appops set com.aistudio.pixelroutines.pxrtns ACCESS_NOTIFICATION_POLICY allow || true")
 
         // 2. Comprehensive Ringer Mode Command Chain
         when (upperMode) {

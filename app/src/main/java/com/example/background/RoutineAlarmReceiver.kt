@@ -35,6 +35,7 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
                     val iconName = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_ICON) ?: "bell"
                     val scheduleType = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_SCHEDULE_TYPE) ?: "ONCE"
                     val time = intent.getStringExtra(RoutineAlarmManager.EXTRA_NOTIF_TIME) ?: "09:00"
+                    val index = intent.getIntExtra(RoutineAlarmManager.EXTRA_NOTIF_INDEX, 0)
 
                     Log.i(TAG, "Custom notification alarm fired: title='$title', scheduleType='$scheduleType', time='$time'")
                     com.example.notification.RoutineNotificationManager.postCustomNotification(
@@ -44,7 +45,7 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
                         iconName = iconName
                     )
 
-                    // If daily, reschedule for tomorrow
+                    // If daily, reschedule for tomorrow; a "Once" notification must not be re-armed
                     if (scheduleType.equals("DAILY", ignoreCase = true)) {
                         RoutineAlarmManager.scheduleCustomNotificationAlarm(
                             context = appContext,
@@ -53,7 +54,13 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
                             message = message,
                             iconName = iconName,
                             scheduleType = scheduleType,
-                            time = time
+                            time = time,
+                            index = index
+                        )
+                    } else {
+                        RoutineAlarmManager.markCustomNotificationOnceDone(
+                            appContext,
+                            RoutineAlarmManager.customNotificationOnceKey(routineId, index, title, time)
                         )
                     }
                 } catch (e: Exception) {

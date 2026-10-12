@@ -291,6 +291,49 @@ object RoutineNotificationManager {
     }
 
     /**
+     * Tells the user a routine could not apply its system actions because Shizuku is not running
+     * (it stops after every reboot on non-rooted phones). Posted even when routine notifications
+     * are turned off, because otherwise the routine fails silently.
+     */
+    fun notifyShizukuUnavailable(context: Context, routineTitle: String) {
+        createNotificationChannel(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            if (permissionCheck != PackageManager.PERMISSION_GRANTED) return
+        }
+
+        try {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                9998,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notif_alert)
+                .setContentTitle("Shizuku isn't running")
+                .setContentText("\"$routineTitle\" couldn't change system settings.")
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText("\"$routineTitle\" couldn't change system settings because Shizuku isn't running. Shizuku stops after every restart; open Shizuku and start it again so routines can run.")
+                )
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .build()
+
+            NotificationManagerCompat.from(context).notify(SHIZUKU_UNAVAILABLE_NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error posting Shizuku unavailable notification", e)
+        }
+    }
+
+    private const val SHIZUKU_UNAVAILABLE_NOTIFICATION_ID = 9998
+
+    /**
      * Resolves the small icon drawable resource for custom notifications based on icon name.
      */
     fun getSmallIconResource(iconName: String): Int {

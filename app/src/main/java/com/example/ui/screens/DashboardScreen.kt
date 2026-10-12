@@ -128,6 +128,7 @@ import com.example.ui.components.ShizukuStatusChip
 import com.example.ui.components.ShizukuStatusIndicator
 import com.example.ui.util.rememberAppHapticFeedback
 import com.example.ui.viewmodel.RoutineViewModel
+import com.example.util.SpecialAccessHelper
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -178,6 +179,18 @@ fun DashboardScreen(
         mutableStateOf(notificationManager?.isNotificationPolicyAccessGranted == true)
     }
 
+    // Special access that specific trigger types depend on; re-checked whenever the screen resumes
+    var canScheduleExactAlarms by remember { mutableStateOf(SpecialAccessHelper.canScheduleExactAlarms(context)) }
+    var hasUsageAccess by remember { mutableStateOf(SpecialAccessHelper.hasUsageAccess(context)) }
+    var hasBackgroundLocation by remember { mutableStateOf(SpecialAccessHelper.hasBackgroundLocation(context)) }
+
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context) }
+    val foregroundLocationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context) }
+
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -190,6 +203,9 @@ fun DashboardScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 hasDndAccess = notificationManager?.isNotificationPolicyAccessGranted == true
+                canScheduleExactAlarms = SpecialAccessHelper.canScheduleExactAlarms(context)
+                hasUsageAccess = SpecialAccessHelper.hasUsageAccess(context)
+                hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     hasNotificationPermission = ContextCompat.checkSelfPermission(
                         context,
@@ -443,6 +459,67 @@ fun DashboardScreen(
                 }
             }
 
+            // Exact alarms: without "Alarms & reminders" timed routines fire late (off by default on Android 14+)
+            val enabledTypes = routines.filter { it.isEnabled }.map { it.triggerType }.toSet()
+            val needsExactAlarms = enabledTypes.any { it == TriggerType.TIME || it == TriggerType.SUNRISE || it == TriggerType.SUNSET }
+            if (needsExactAlarms && !canScheduleExactAlarms) {
+                item {
+                    RoutineAccessBanner(
+                        icon = Icons.Default.Alarm,
+                        title = "Allow alarms & reminders",
+                        message = "Timed routines can run minutes late until you allow exact alarms.",
+                        buttonLabel = "Allow",
+                        onClick = { SpecialAccessHelper.openExactAlarmSettings(context) },
+                        testTag = "exact_alarm_banner"
+                    )
+                }
+            }
+
+            // Usage access: needed to notice when an app is opened
+            if (TriggerType.APP in enabledTypes && !hasUsageAccess) {
+                item {
+                    RoutineAccessBanner(
+                        icon = Icons.Default.Smartphone,
+                        title = "Allow usage access",
+                        message = "\"App opened\" routines need usage access to see which app is on screen.",
+                        buttonLabel = if (shizukuState == ShizukuState.AUTHORIZED) "Auto-grant" else "Settings",
+                        onClick = {
+                            if (shizukuState == ShizukuState.AUTHORIZED) {
+                                viewModel.grantUsageAccessViaShizuku { granted ->
+                                    hasUsageAccess = granted
+                                    if (!granted) SpecialAccessHelper.openUsageAccessSettings(context)
+                                }
+                            } else {
+                                SpecialAccessHelper.openUsageAccessSettings(context)
+                            }
+                        },
+                        testTag = "usage_access_banner"
+                    )
+                }
+            }
+
+            // Background location: geofences don't fire while the app is closed without it
+            if (TriggerType.LOCATION in enabledTypes && !hasBackgroundLocation) {
+                item {
+                    RoutineAccessBanner(
+                        icon = Icons.Default.LocationOn,
+                        title = "Allow location all the time",
+                        message = "Location routines only work in the background with \"Allow all the time\".",
+                        buttonLabel = "Allow",
+                        onClick = {
+                            if (!com.example.util.LocationHelper.hasLocationPermission(context)) {
+                                foregroundLocationLauncher.launch(
+                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                                )
+                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                            }
+                        },
+                        testTag = "background_location_banner"
+                    )
+                }
+            }
+
             // DND / Sound Mode Access Banner if not granted and sound profiles exist
             if (!hasDndAccess && routines.any { r -> r.actions.any { a -> a.type.name == "SOUND_PROFILE" } }) {
                 item {
@@ -657,6 +734,64 @@ fun DashboardScreen(
             onOpenDiagnostics = { showDiagnosticsDialog = true },
             onDismiss = { showShizukuSheet = false }
         )
+    }
+}
+
+@Composable
+private fun RoutineAccessBanner(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    message: String,
+    buttonLabel: String,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    val accent = MaterialTheme.colorScheme.error
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = accent.copy(alpha = 0.08f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onClick,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(buttonLabel)
+            }
+        }
     }
 }
 

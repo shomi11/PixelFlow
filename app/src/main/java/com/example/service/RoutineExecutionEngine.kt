@@ -6,7 +6,6 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import android.util.Log
-import com.example.background.RoutineAlarmManager
 import com.example.data.local.AppDatabase
 import com.example.data.model.ActionType
 import com.example.data.model.CustomNotificationConfig
@@ -21,6 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -39,6 +40,11 @@ object RoutineExecutionTracker {
     }
 
     fun isRunning(routineId: Long): Boolean = _runningRoutineIds.value.contains(routineId)
+
+    private val locks = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
+
+    /** One lock per routine so a widget tap, an alarm and a trigger can't run it at the same time. */
+    fun lockFor(routineId: Long): Mutex = locks.getOrPut(routineId) { Mutex() }
 }
 
 class RoutineExecutionEngine(private val context: Context) {
@@ -47,7 +53,25 @@ class RoutineExecutionEngine(private val context: Context) {
     private val database = AppDatabase.getDatabase(appContext)
     private val dao = database.routineDao()
 
-    suspend fun executeRoutine(routine: RoutineEntity, triggerReason: String = "Manual Execution"): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * Runs the routine's actions. If the same routine is already running (e.g. a widget tap while its
+     * alarm fires), the second request is skipped instead of interleaving with the first, which
+     * would capture a half-applied settings snapshot.
+     */
+    suspend fun executeRoutine(routine: RoutineEntity, triggerReason: String = "Manual Execution"): Boolean {
+        val lock = RoutineExecutionTracker.lockFor(routine.id)
+        if (!lock.tryLock()) {
+            Log.i(TAG, "Routine ${routine.title} is already running; skipping duplicate trigger ($triggerReason)")
+            return false
+        }
+        return try {
+            executeRoutineLocked(routine, triggerReason)
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    private suspend fun executeRoutineLocked(routine: RoutineEntity, triggerReason: String): Boolean = withContext(Dispatchers.IO) {
         Log.i(TAG, "Executing routine: ${routine.title} (Trigger: $triggerReason)")
         RoutineExecutionTracker.markRunning(routine.id)
         try {
@@ -63,7 +87,7 @@ class RoutineExecutionEngine(private val context: Context) {
 
         val actions = routine.parseActions()
         // Always ensure Shizuku binder is attached and verified before executing actions
-        com.example.shizuku.ShizukuServiceHelper.ensureAuthorized(timeoutMs = 2500L)
+        val shizukuReady = com.example.shizuku.ShizukuServiceHelper.ensureAuthorized(timeoutMs = 2500L)
 
         // Capture snapshot of current hardware/system settings before modifying them
         if (routine.restoreOnEnd && actions.isNotEmpty()) {
@@ -153,6 +177,10 @@ class RoutineExecutionEngine(private val context: Context) {
         )
         dao.insertLog(log)
 
+        if (!overallSuccess && !shizukuReady && actions.any { it.type.requiresShizuku }) {
+            RoutineNotificationManager.notifyShizukuUnavailable(appContext, routine.title)
+        }
+
         // Post system notification detailing routine and actions taken
         try {
             RoutineNotificationManager.notifyRoutineExecuted(
@@ -175,7 +203,14 @@ class RoutineExecutionEngine(private val context: Context) {
      * Triggered when routine conditions end (e.g., Bluetooth disconnected, Wi-Fi lost,
      * time window finished, or manual stop).
      */
-    suspend fun restoreRoutineSettings(routine: RoutineEntity, endReason: String = "Routine Ended"): Boolean = withContext(Dispatchers.IO) {
+    suspend fun restoreRoutineSettings(routine: RoutineEntity, endReason: String = "Routine Ended"): Boolean {
+        // Waits for a running execution of the same routine to finish so the snapshot is complete
+        return RoutineExecutionTracker.lockFor(routine.id).withLock {
+            restoreRoutineSettingsLocked(routine, endReason)
+        }
+    }
+
+    private suspend fun restoreRoutineSettingsLocked(routine: RoutineEntity, endReason: String): Boolean = withContext(Dispatchers.IO) {
         Log.i(TAG, "Restoring previous settings for routine: ${routine.title} ($endReason)")
         val snapshot = RoutineStateSnapshotManager.getSnapshot(appContext, routine.id)
         if (snapshot.isNullOrEmpty()) {
@@ -325,13 +360,17 @@ class RoutineExecutionEngine(private val context: Context) {
                 ShizukuManager.setHotspot(action.enabledState)
             }
             ActionType.BLUETOOTH -> {
-                try {
-                    @Suppress("DEPRECATION")
-                    val btAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
-                    @Suppress("DEPRECATION")
-                    if (action.enabledState) btAdapter?.enable() else btAdapter?.disable()
-                } catch (e: Throwable) {
-                    // Privileged fallback
+                // BluetoothAdapter.enable()/disable() are no-ops for apps on Android 13+, so the
+                // native call is only attempted on older versions; Shizuku does the real work.
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && hasBluetoothConnectPermission()) {
+                    try {
+                        @Suppress("DEPRECATION")
+                        val btAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+                        @Suppress("DEPRECATION", "MissingPermission")
+                        if (action.enabledState) btAdapter?.enable() else btAdapter?.disable()
+                    } catch (e: Throwable) {
+                        // Privileged fallback
+                    }
                 }
                 ShizukuManager.setBluetooth(action.enabledState)
             }
@@ -357,6 +396,14 @@ class RoutineExecutionEngine(private val context: Context) {
         }
     }
 
+    private fun hasBluetoothConnectPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                appContext,
+                android.Manifest.permission.BLUETOOTH_CONNECT
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
     private fun executeCustomNotification(action: RoutineActionItem): ShellResult {
         return try {
             val cfg = CustomNotificationConfig.fromJsonString(action.stringValue)
@@ -375,18 +422,12 @@ class RoutineExecutionEngine(private val context: Context) {
                     isSuccess = true
                 )
             } else {
-                RoutineAlarmManager.scheduleCustomNotificationAlarm(
-                    context = appContext,
-                    routineId = 0L,
-                    title = cfg.title,
-                    message = cfg.message,
-                    iconName = cfg.iconName,
-                    scheduleType = cfg.scheduleType,
-                    time = cfg.time
-                )
+                // Timed notifications are scheduled when the routine is saved or enabled
+                // (RoutineAlarmManager.scheduleRoutineCustomNotifications); scheduling again here
+                // would post the same reminder twice.
                 ShellResult(
                     exitCode = 0,
-                    stdout = "Custom notification '${cfg.title}' scheduled for ${cfg.time} (${cfg.scheduleType})",
+                    stdout = "Custom notification '${cfg.title}' is scheduled for ${cfg.time} (${cfg.scheduleType})",
                     stderr = "",
                     executedCommand = "schedule_custom_notification",
                     isSuccess = true
