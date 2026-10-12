@@ -4130,7 +4130,7 @@ fun RoutineEditor(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Pixel Routines",
+                                            text = "PixelFlow",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 11.sp
@@ -4679,7 +4679,7 @@ fun RoutineEditor(
                                 actions.forEach {
                                     appendLine(" • ${it.type.name}")
                                 }
-                                appendLine("\nExported via Pixel Routines")
+                                appendLine("\nExported via PixelFlow")
                             }
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"

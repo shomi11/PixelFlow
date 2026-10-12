@@ -146,7 +146,7 @@ fun SingleRoutineWidgetConfigureScreen(
                         Text("No routines created yet", style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Open Pixel Routines or create an instant quick routine below.",
+                            "Open PixelFlow or create an instant quick routine below.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

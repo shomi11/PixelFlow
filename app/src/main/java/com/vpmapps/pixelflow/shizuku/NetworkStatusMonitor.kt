@@ -139,7 +139,7 @@ object NetworkStatusMonitor {
     }
 
     /**
-     * Checks if Pixel Routines has been exempted from battery optimizations.
+     * Checks if PixelFlow has been exempted from battery optimizations.
      */
     fun isAppBatteryOptimizationIgnored(context: Context): Boolean {
         val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false

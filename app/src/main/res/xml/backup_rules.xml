@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
     <include domain="database" path="pixel_routines_database" />
+    <include domain="database" path="pixel_routines_database-wal" />
+    <include domain="database" path="pixel_routines_database-shm" />
     <include domain="sharedpref" path="pixel_routines_prefs.xml" />
 </full-backup-content>

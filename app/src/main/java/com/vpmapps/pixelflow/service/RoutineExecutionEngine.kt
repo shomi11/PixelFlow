@@ -585,7 +585,7 @@ class RoutineExecutionEngine(private val context: Context) {
                 )
             }
         } else {
-            val failureReason = exceptionMessage ?: "Do Not Disturb (Notification Policy) access is not granted to Pixel Routines and Shizuku is offline."
+            val failureReason = exceptionMessage ?: "Do Not Disturb (Notification Policy) access is not granted to PixelFlow and Shizuku is offline."
             ShellResult(
                 exitCode = 1,
                 stdout = "",

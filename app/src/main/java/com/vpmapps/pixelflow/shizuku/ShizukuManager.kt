@@ -108,7 +108,7 @@ object ShizukuManager {
 
         val commands = mutableListOf<String>()
 
-        // 1. Ensure Do Not Disturb Access is granted to Pixel Routines via AppOps so AudioManager & system APIs work natively
+        // 1. Ensure Do Not Disturb Access is granted to PixelFlow via AppOps so AudioManager & system APIs work natively
         commands.add("appops set $targetPackageName ACCESS_NOTIFICATION_POLICY allow || true")
 
         // 2. Comprehensive Ringer Mode Command Chain

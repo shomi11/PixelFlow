@@ -261,7 +261,7 @@ fun ShizukuStatusIndicator(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Shizuku service is running on your device, but Pixel Routines does not have permission to execute ADB shell commands. Automated rules cannot modify system settings until permission is granted.",
+                                text = "Shizuku service is running on your device, but PixelFlow does not have permission to execute ADB shell commands. Automated rules cannot modify system settings until permission is granted.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF4E342E)
                             )

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 // import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 
 plugins {
@@ -22,12 +24,19 @@ android {
   }
 
   signingConfigs {
+    // Upload key for Play. Read from keystore.properties (git-ignored) or environment variables;
+    // when neither is set the release build is left unsigned and Android Studio's
+    // "Generate Signed App Bundle" wizard supplies the key instead.
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      val props = Properties()
+      rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+      val keystorePath = props.getProperty("storeFile") ?: System.getenv("KEYSTORE_PATH")
+      if (keystorePath != null && file(keystorePath).exists()) {
+        storeFile = file(keystorePath)
+        storePassword = props.getProperty("storePassword") ?: System.getenv("STORE_PASSWORD")
+        keyAlias = props.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS") ?: "upload"
+        keyPassword = props.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
+      }
     }
     create("debugConfig") {
       val debugKs = file("${rootDir}/debug.keystore")
@@ -45,7 +54,7 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
     }
     debug {
       if (file("${rootDir}/debug.keystore").exists()) {

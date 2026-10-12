@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Pixel Routines"
+rootProject.name = "PixelFlow"
 include(":app")

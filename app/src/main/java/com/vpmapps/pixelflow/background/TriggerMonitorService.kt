@@ -153,7 +153,7 @@ class TriggerMonitorService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(CHANNEL_ID, "Background triggers", NotificationManager.IMPORTANCE_MIN).apply {
-            description = "Shown while Pixel Routines watches for Wi-Fi, battery and app triggers"
+            description = "Shown while PixelFlow watches for Wi-Fi, battery and app triggers"
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)

@@ -167,7 +167,7 @@ fun ShizukuSettingsSheet(
                         Color(0xFFE65100),
                         Color(0xFFE65100).copy(alpha = 0.12f),
                         "Permission Required",
-                        "Shizuku service is running. Tap Authorize to allow Pixel Routines to toggle system settings.",
+                        "Shizuku service is running. Tap Authorize to allow PixelFlow to toggle system settings.",
                         Icons.Default.Key
                     )
                 }

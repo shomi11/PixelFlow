@@ -274,7 +274,7 @@ object RoutineNotificationManager {
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("Pixel Routines Notifications Active")
+                .setContentTitle("PixelFlow Notifications Active")
                 .setContentText("You will receive alerts whenever automated routines trigger.")
                 .setStyle(
                     NotificationCompat.BigTextStyle()

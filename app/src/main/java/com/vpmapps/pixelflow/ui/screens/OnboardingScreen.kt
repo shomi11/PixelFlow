@@ -98,7 +98,7 @@ import com.vpmapps.pixelflow.ui.viewmodel.RoutineViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Modern, Material 3 Onboarding Page that introduces Pixel Routines,
+ * Modern, Material 3 Onboarding Page that introduces PixelFlow,
  * explains Shizuku rootless privilege execution, showcases triggers and
  * actions, and verifies device readiness.
  */
@@ -167,7 +167,7 @@ fun OnboardingScreen(
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Pixel Routines",
+                        text = "PixelFlow",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -549,7 +549,7 @@ private fun OnboardingShizukuSlide(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Pixel Routines communicates with Android's system server via Shizuku IPC to modify protected system settings without requiring root access.",
+            text = "PixelFlow communicates with Android's system server via Shizuku IPC to modify protected system settings without requiring root access.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -619,7 +619,7 @@ private fun OnboardingShizukuSlide(
                 InformativeStepRow(
                     stepNumber = "3",
                     title = "One-Tap Authorization",
-                    description = "Authorize Pixel Routines whenever you're ready inside the app settings menu."
+                    description = "Authorize PixelFlow whenever you're ready inside the app settings menu."
                 )
 
                 // Informative code note

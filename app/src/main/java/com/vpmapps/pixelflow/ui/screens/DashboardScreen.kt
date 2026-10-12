@@ -119,6 +119,7 @@ import com.vpmapps.pixelflow.ui.components.ExpressiveFilterChip
 import com.vpmapps.pixelflow.ui.components.ExpressiveSwitch
 import com.vpmapps.pixelflow.data.model.RoutineEntity
 import com.vpmapps.pixelflow.data.model.TriggerType
+import com.vpmapps.pixelflow.shizuku.NetworkStatusMonitor
 import com.vpmapps.pixelflow.shizuku.ShizukuState
 import com.vpmapps.pixelflow.ui.components.ExecutionLogsDialog
 import com.vpmapps.pixelflow.ui.components.ShizukuConsoleDialog
@@ -183,6 +184,7 @@ fun DashboardScreen(
     var canScheduleExactAlarms by remember { mutableStateOf(SpecialAccessHelper.canScheduleExactAlarms(context)) }
     var hasUsageAccess by remember { mutableStateOf(SpecialAccessHelper.hasUsageAccess(context)) }
     var hasBackgroundLocation by remember { mutableStateOf(SpecialAccessHelper.hasBackgroundLocation(context)) }
+    var isBatteryUnrestricted by remember { mutableStateOf(NetworkStatusMonitor.isAppBatteryOptimizationIgnored(context)) }
 
     val backgroundLocationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -206,6 +208,7 @@ fun DashboardScreen(
                 canScheduleExactAlarms = SpecialAccessHelper.canScheduleExactAlarms(context)
                 hasUsageAccess = SpecialAccessHelper.hasUsageAccess(context)
                 hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context)
+                isBatteryUnrestricted = NetworkStatusMonitor.isAppBatteryOptimizationIgnored(context)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     hasNotificationPermission = ContextCompat.checkSelfPermission(
                         context,
@@ -247,7 +250,7 @@ fun DashboardScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Pixel Routines",
+                        text = "PixelFlow",
                         fontWeight = FontWeight.ExtraBold,
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface
@@ -471,6 +474,20 @@ fun DashboardScreen(
                         buttonLabel = "Allow",
                         onClick = { SpecialAccessHelper.openExactAlarmSettings(context) },
                         testTag = "exact_alarm_banner"
+                    )
+                }
+            }
+
+            // Battery optimization: without the exemption Android may delay or kill background routines
+            if (enabledTypes.isNotEmpty() && !isBatteryUnrestricted) {
+                item {
+                    RoutineAccessBanner(
+                        icon = Icons.Default.BatteryAlert,
+                        title = "Let routines run in the background",
+                        message = "Battery optimization can delay or stop routines while your phone is idle.",
+                        buttonLabel = "Allow",
+                        onClick = { NetworkStatusMonitor.requestIgnoreBatteryOptimizations(context) },
+                        testTag = "battery_optimization_banner"
                     )
                 }
             }
@@ -1135,7 +1152,7 @@ fun RoutineCard(
                                 if (routine.description.isNotBlank()) appendLine("Description: ${routine.description}")
                                 appendLine("Trigger: ${routine.getTriggerSummary()}")
                                 if (acts.isNotBlank()) appendLine("Actions: $acts")
-                                appendLine("\nCreated with Pixel Routines")
+                                appendLine("\nCreated with PixelFlow")
                             }
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -1305,7 +1322,7 @@ fun ShizukuGuideDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Pixel Routines leverages Shizuku to toggle system settings without root:\n" +
+                    text = "PixelFlow leverages Shizuku to toggle system settings without root:\n" +
                             "• Always-On Display (AOD)\n" +
                             "• Wi-Fi & Bluetooth state\n" +
                             "• Battery Saver mode\n" +
@@ -1322,7 +1339,7 @@ fun ShizukuGuideDialog(onDismiss: () -> Unit) {
                     text = "1. Install Shizuku from Play Store or GitHub.\n" +
                             "2. Enable Developer Options & Wireless Debugging in Settings.\n" +
                             "3. Open Shizuku -> Start via Wireless Debugging.\n" +
-                            "4. Return to Pixel Routines and tap 'Grant Permission'.",
+                            "4. Return to PixelFlow and tap 'Grant Permission'.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(4.dp))

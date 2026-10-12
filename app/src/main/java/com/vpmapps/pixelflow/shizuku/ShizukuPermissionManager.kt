@@ -193,7 +193,7 @@ object ShizukuPermissionManager : Shizuku.OnRequestPermissionResultListener {
             stage = "Permission Result",
             message = if (granted) "Shizuku authorization granted by user!" else "Shizuku authorization denied by user.",
             technicalDetails = "requestCode=$requestCode, grantResult=$grantResult",
-            suggestedFix = if (!granted) "Open Shizuku app -> 'Authorized Applications' -> enable Pixel Routines." else null
+            suggestedFix = if (!granted) "Open Shizuku app -> 'Authorized Applications' -> enable PixelFlow." else null
         )
 
         // Notify listeners immediately
@@ -722,15 +722,15 @@ object ShizukuPermissionManager : Shizuku.OnRequestPermissionResultListener {
                     addResult(
                         DiagnosticLevel.SUCCESS,
                         "Authorization Check",
-                        "Pixel Routines is fully AUTHORIZED by Shizuku. Shell commands can execute directly."
+                        "PixelFlow is fully AUTHORIZED by Shizuku. Shell commands can execute directly."
                     )
                 } else {
                     addResult(
                         DiagnosticLevel.WARNING,
                         "Authorization Check",
-                        "Shizuku service is running, but Pixel Routines does not have permission granted yet.",
+                        "Shizuku service is running, but PixelFlow does not have permission granted yet.",
                         "Shizuku.checkSelfPermission() = PERMISSION_DENIED.",
-                        "Tap 'Connect & Authorize' in the app or enable Pixel Routines inside Shizuku app -> Authorized Applications."
+                        "Tap 'Connect & Authorize' in the app or enable PixelFlow inside Shizuku app -> Authorized Applications."
                     )
                 }
             } else {
@@ -795,7 +795,7 @@ object ShizukuPermissionManager : Shizuku.OnRequestPermissionResultListener {
                 addResult(
                     DiagnosticLevel.SUCCESS,
                     "Battery Optimization",
-                    "Pixel Routines is exempted from Android battery optimizations (Unrestricted background execution enabled)."
+                    "PixelFlow is exempted from Android battery optimizations (Unrestricted background execution enabled)."
                 )
             } else {
                 addResult(
@@ -803,7 +803,7 @@ object ShizukuPermissionManager : Shizuku.OnRequestPermissionResultListener {
                     "Battery Optimization",
                     "Battery optimization is active for this app or Shizuku.",
                     "Android may kill Shizuku daemon or routine alarm timers when the screen is turned off or in your pocket.",
-                    "Set Shizuku and Pixel Routines battery usage to 'Unrestricted' in App Info."
+                    "Set Shizuku and PixelFlow battery usage to 'Unrestricted' in App Info."
                 )
             }
         } catch (e: Throwable) {
