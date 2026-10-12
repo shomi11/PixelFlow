@@ -69,6 +69,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
@@ -97,9 +98,9 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.example.ACTION_TRIGGER_ROUTINE_ALARM" />
-                <action android:name="com.example.ACTION_RESTORE_ROUTINE" />
-                <action android:name="com.example.ACTION_END_ROUTINE_ALARM" />
+                <action android:name="com.vpmapps.pixelflow.ACTION_TRIGGER_ROUTINE_ALARM" />
+                <action android:name="com.vpmapps.pixelflow.ACTION_RESTORE_ROUTINE" />
+                <action android:name="com.vpmapps.pixelflow.ACTION_END_ROUTINE_ALARM" />
             </intent-filter>
         </receiver>
 
@@ -131,7 +132,7 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.example.ACTION_GEOFENCE_TRANSITION" />
+                <action android:name="com.vpmapps.pixelflow.ACTION_GEOFENCE_TRANSITION" />
             </intent-filter>
         </receiver>
 
