@@ -60,7 +60,8 @@ class RoutinesListRemoteViewsFactory(private val context: Context) : RemoteViews
         views.setTextViewText(R.id.widget_item_subtitle, if (actionsSummary.isNotBlank()) actionsSummary else "No actions configured")
 
         val isExecuting = RoutineExecutionTracker.isRunning(routine.id) || routine.lastExecutionStatus == "RUNNING"
-        val isInActiveSchedule = routine.isCurrentlyInActiveWindow()
+        val isInActiveSchedule = routine.isEnabled &&
+            com.vpmapps.pixelflow.background.RoutineActivationStore.isActive(context, routine.id)
         val isCurrentlyRunning = isExecuting || isInActiveSchedule
 
         if (isCurrentlyRunning) {

@@ -107,33 +107,22 @@ class RoutineAlarmReceiver : BroadcastReceiver() {
                 if (routine != null) {
                     when (action) {
                         RoutineAlarmManager.ACTION_RESTORE_ROUTINE -> {
+                            // Manual end: settings are restored, but the routine stays "on" so it
+                            // doesn't immediately start again while its conditions are still met.
                             Log.i(TAG, "Restoring routine ${routine.name} requested by user action")
                             engine.restoreRoutineSettings(routine, "Manually Ended by User")
                         }
+                        RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM,
                         RoutineAlarmManager.ACTION_END_ROUTINE_ALARM -> {
-                            Log.i(TAG, "Routine schedule end alarm triggered for ${routine.name}")
-                            if (routine.restoreOnEnd) {
-                                engine.restoreRoutineSettings(routine, "Scheduled time window ended")
-                            }
-                            if (routine.isEnabled) {
+                            if (isTest) {
+                                engine.executeRoutine(routine, "Precision Alarm Test (Immediate)")
+                            } else if (routine.isEnabled) {
+                                // Window start/end changes a state; a time of day, sunrise or sunset is a moment
+                                val isMoment = action == RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM &&
+                                    routine.timeCondition?.isMoment == true
+                                val event = if (isMoment) ConditionEvent.MomentReached(routine.id) else ConditionEvent.StateChanged
+                                TriggerEvaluator.evaluate(appContext, event, routineId = routine.id)
                                 RoutineAlarmManager.scheduleExactRoutineAlarm(appContext, routine)
-                            }
-                        }
-                        RoutineAlarmManager.ACTION_TRIGGER_ROUTINE_ALARM -> {
-                            if (routine.isEnabled || isTest) {
-                                val triggerReason = if (isTest) {
-                                    "Precision Alarm Test (Immediate)"
-                                } else {
-                                    "AlarmManager Scheduled Trigger (${routine.getTriggerSummary()})"
-                                }
-
-                                val success = engine.executeRoutine(routine, triggerReason)
-                                Log.i(TAG, "Routine executed via precision alarm: ${routine.name}, success=$success")
-
-                                // Reschedule next recurring alarm instance
-                                if (!isTest && routine.isEnabled) {
-                                    RoutineAlarmManager.scheduleExactRoutineAlarm(appContext, routine)
-                                }
                             } else {
                                 Log.w(TAG, "Routine $routineId disabled. Canceling alarm.")
                                 RoutineAlarmManager.cancelRoutineAlarm(appContext, routineId)

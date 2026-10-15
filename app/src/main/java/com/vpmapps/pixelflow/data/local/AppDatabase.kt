@@ -12,7 +12,7 @@ import com.vpmapps.pixelflow.data.model.RoutineExecutionLog
 
 @Database(
     entities = [Routine::class, RoutineExecutionLog::class],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -30,6 +30,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the All/Any setting for routines with several conditions. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE routines ADD COLUMN matchMode TEXT NOT NULL DEFAULT 'ALL'")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -37,7 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pixel_routines_database"
                 )
-                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                     // Only the pre-release v1 schema has no migration path. Every later version
                     // must ship a Migration so user routines are never silently wiped.
                     .fallbackToDestructiveMigrationFrom(true, 1)

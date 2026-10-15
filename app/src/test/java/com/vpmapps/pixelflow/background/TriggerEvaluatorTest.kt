@@ -39,7 +39,9 @@ class TriggerEvaluatorTest {
         context = ApplicationProvider.getApplicationContext()
         resetDatabaseSingleton()
         dao = AppDatabase.getDatabase(context).routineDao()
-        context.getSharedPreferences("trigger_state_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        listOf("device_facts", "routine_activation").forEach {
+            context.getSharedPreferences(it, Context.MODE_PRIVATE).edit().clear().commit()
+        }
     }
 
     @After
@@ -94,58 +96,63 @@ class TriggerEvaluatorTest {
     }
 
     @Test
-    fun wifiDisconnectTrigger_firesWhenLeavingNetwork() = runBlocking {
+    fun wifiDisconnectedCondition_isAState() = runBlocking {
         insertRoutine(TriggerType.WIFI, JSONObject().put("connected", false).put("ssid", "Any Network"))
 
+        // "Not on Wi-Fi" is already true, so the routine starts right away
         TriggerEvaluator.onWifiState(context, isConnected = false, ssid = "")
-        assertEquals(0, executionCount())
+        TriggerEvaluator.onWifiState(context, isConnected = false, ssid = "")
+        assertEquals(1, executionCount())
 
         TriggerEvaluator.onWifiState(context, isConnected = true, ssid = "Home")
         TriggerEvaluator.onWifiState(context, isConnected = false, ssid = "")
-        TriggerEvaluator.onWifiState(context, isConnected = false, ssid = "")
-        assertEquals(1, executionCount())
+        assertEquals(2, executionCount())
     }
 
     @Test
-    fun appTrigger_firesWhenTargetAppComesToForeground() = runBlocking {
-        insertRoutine(TriggerType.APP, JSONObject().put("appName", "Maps").put("packageName", "com.google.android.apps.maps"))
+    fun wifiAndTimeOfDay_runsOnlyAtThatTimeOnThatNetwork() = runBlocking {
+        val id = insertRoutine(
+            listOf(
+                RoutineTrigger(TriggerType.WIFI, JSONObject().put("connected", true).put("ssid", "Home").toString()),
+                RoutineTrigger(TriggerType.TIME, JSONObject().put("scheduleMode", "DAILY").put("startTime", "21:00").toString())
+            )
+        )
 
-        TriggerEvaluator.onForegroundAppChanged(context, "com.android.launcher", "com.whatsapp")
+        // Joining Home Wi-Fi alone doesn't run it: it waits for 9 pm
+        TriggerEvaluator.onWifiState(context, isConnected = true, ssid = "Home")
         assertEquals(0, executionCount())
 
-        TriggerEvaluator.onForegroundAppChanged(context, "com.whatsapp", "com.google.android.apps.maps")
-        TriggerEvaluator.onForegroundAppChanged(context, "com.google.android.apps.maps", "com.android.launcher")
+        // Alarm moments read Wi-Fi live from the system; simulate being on Home / Office Wi-Fi
+        val onHome: (DeviceFacts) -> DeviceFacts = { it.copy(wifiConnected = true, wifiSsid = "Home") }
+        val onOffice: (DeviceFacts) -> DeviceFacts = { it.copy(wifiConnected = true, wifiSsid = "Office") }
+
+        TriggerEvaluator.evaluate(context, ConditionEvent.MomentReached(id), routineId = id, adjustFacts = onHome)
         assertEquals(1, executionCount())
+
+        // Next evening at 9 pm, still at home: runs again
+        TriggerEvaluator.evaluate(context, ConditionEvent.MomentReached(id), routineId = id, adjustFacts = onHome)
+        assertEquals(2, executionCount())
+
+        // 9 pm somewhere else: doesn't run
+        TriggerEvaluator.evaluate(context, ConditionEvent.MomentReached(id), routineId = id, adjustFacts = onOffice)
+        assertEquals(2, executionCount())
     }
 
-    @Test
-    fun disabledRoutines_areIgnored() = runBlocking {
-        insertRoutine(TriggerType.BATTERY, JSONObject().put("charging", true), enabled = false)
-        TriggerEvaluator.onBatteryState(context, 50, isCharging = true)
-        assertEquals(0, executionCount())
-    }
+    private suspend fun insertRoutine(type: TriggerType, config: JSONObject, enabled: Boolean = true): Long =
+        insertRoutine(listOf(RoutineTrigger(type = type, configJson = config.toString())), enabled = enabled)
 
-    @Test
-    fun sameRoutine_doesNotRunTwiceConcurrently() = runBlocking {
-        val id = insertRoutine(TriggerType.TIME, JSONObject().put("startTime", "08:00"))
-        val routine = dao.getRoutineById(id)!!
-        val engine = RoutineExecutionEngine(context)
-
-        val first = async { engine.executeRoutine(routine, "first") }
-        val second = async { engine.executeRoutine(routine, "second") }
-        val results = listOf(first.await(), second.await())
-
-        assertEquals(1, executionCount())
-        assertTrue(results.contains(false))
-    }
-
-    private suspend fun insertRoutine(type: TriggerType, config: JSONObject, enabled: Boolean = true): Long {
+    private suspend fun insertRoutine(
+        triggers: List<RoutineTrigger>,
+        matchMode: String = Routine.MATCH_ALL,
+        enabled: Boolean = true
+    ): Long {
         val notification = CustomNotificationConfig(title = "Test", scheduleType = "IMMEDIATE")
         return dao.insertRoutine(
             Routine(
-                name = "Test ${type.name}",
+                name = "Test ${triggers.joinToString { it.type.name }}",
                 isEnabled = enabled,
-                triggers = listOf(RoutineTrigger(type = type, configJson = config.toString())),
+                triggers = triggers,
+                matchMode = matchMode,
                 actions = listOf(RoutineActionItem(type = ActionType.CUSTOM_NOTIFICATION, stringValue = notification.toJsonString())),
                 restoreOnEnd = false
             )

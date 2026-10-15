@@ -73,6 +73,9 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  // Exported Room schemas for the database migration tests. Robolectric reads assets from the
+  // debug variant, so they're added there (debug builds only, never the release bundle).
+  sourceSets { getByName("debug").assets.directories.add("$projectDir/schemas") }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
@@ -136,6 +139,7 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
+  testImplementation(libs.androidx.room.testing)
   androidTestImplementation(platform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   androidTestImplementation(libs.androidx.espresso.core)

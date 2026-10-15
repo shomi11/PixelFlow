@@ -18,7 +18,11 @@ enum class TriggerType(val displayName: String, val description: String) {
     WIFI("Wi-Fi Network", "When connected or disconnected from a Wi-Fi SSID"),
     BLUETOOTH("Bluetooth Device", "When connected or disconnected from a Bluetooth device"),
     BATTERY("Battery Level", "When battery level drops below a threshold or charging state changes"),
-    APP("App Opened", "When a specific application is launched into the foreground")
+    APP("App Opened", "When a specific application is launched into the foreground");
+
+    /** Time, sunrise and sunset share one alarm slot, so a routine can have only one of them. */
+    val isTimeBased: Boolean
+        get() = this == TIME || this == SUNRISE || this == SUNSET
 }
 
 /**
@@ -87,6 +91,165 @@ data class RoutineTrigger(
     val configJson: String = "{}",
     val displayName: String = type.displayName
 ) {
+    /**
+     * True for conditions that happen at a moment (a time of day, sunrise, sunset) rather than
+     * describing a state that stays true for a while. A TIME condition with an end time is a window,
+     * which is a state.
+     */
+    val isMoment: Boolean
+        get() = when (type) {
+            TriggerType.SUNRISE, TriggerType.SUNSET -> true
+            TriggerType.TIME -> !isTimeWindow
+            else -> false
+        }
+
+    /** TIME condition with a distinct end time, e.g. 22:00 - 07:00. */
+    val isTimeWindow: Boolean
+        get() {
+            if (type != TriggerType.TIME) return false
+            return try {
+                val json = JSONObject(configJson)
+                val start = json.optString("startTime", "")
+                val end = json.optString("endTime", "")
+                json.optString("scheduleMode", "DAILY") != "INTERVAL" && end.isNotBlank() && end != start
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+    /**
+     * Whether [now] falls inside this TIME window. The window includes its start minute and excludes
+     * its end minute, so the end alarm reliably sees the window as over. For overnight windows the
+     * part after midnight belongs to the day the window started.
+     */
+    fun isWithinTimeWindow(now: java.util.Calendar): Boolean {
+        if (!isTimeWindow) return false
+        return try {
+            val json = JSONObject(configJson)
+            val parsedStart = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(json.optString("startTime", "")) ?: return false
+            val parsedEnd = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(json.optString("endTime", "")) ?: return false
+            val startMin = parsedStart.first * 60 + parsedStart.second
+            val endMin = parsedEnd.first * 60 + parsedEnd.second
+            val currentMin = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+            val days = json.optString("days", "Daily")
+
+            if (startMin < endMin) {
+                currentMin in startMin until endMin && isScheduledDay(days, now)
+            } else if (currentMin >= startMin) {
+                isScheduledDay(days, now)
+            } else if (currentMin < endMin) {
+                val windowStartDay = (now.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+                isScheduledDay(days, windowStartDay)
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isScheduledDay(days: String, day: java.util.Calendar): Boolean {
+        if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) return true
+        val dayName = when (day.get(java.util.Calendar.DAY_OF_WEEK)) {
+            java.util.Calendar.MONDAY -> "Mon"
+            java.util.Calendar.TUESDAY -> "Tue"
+            java.util.Calendar.WEDNESDAY -> "Wed"
+            java.util.Calendar.THURSDAY -> "Thu"
+            java.util.Calendar.FRIDAY -> "Fri"
+            java.util.Calendar.SATURDAY -> "Sat"
+            else -> "Sun"
+        }
+        return days.contains(dayName, ignoreCase = true)
+    }
+
+    fun summary(): String {
+        return try {
+            val json = JSONObject(configJson)
+            when (type) {
+                TriggerType.TIME -> {
+                    val mode = json.optString("scheduleMode", "DAILY")
+                    val start = json.optString("startTime", "08:00")
+                    val days = json.optString("days", "Daily")
+                    val interval = json.optInt("intervalMinutes", 0)
+                    val parsed = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(start)
+                    val friendlyTime = if (parsed != null) {
+                        com.vpmapps.pixelflow.util.TimeParser.format12Hour(parsed.first, parsed.second)
+                    } else start
+
+                    val end = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(json.optString("endTime", ""))
+                    if (isTimeWindow && end != null) {
+                        val friendlyEnd = com.vpmapps.pixelflow.util.TimeParser.format12Hour(end.first, end.second)
+                        val dayText = if (days.isBlank() || days.equals("Daily", ignoreCase = true) ||
+                            days == "Mon, Tue, Wed, Thu, Fri, Sat, Sun") "" else " ($days)"
+                        return "$friendlyTime – $friendlyEnd$dayText"
+                    }
+                    when (mode) {
+                        "INTERVAL" -> if (interval >= 60) "Every ${interval / 60}h" else "Every ${interval}m"
+                        "WEEKLY" -> "Weekly ($days) at $friendlyTime"
+                        "SPECIFIC_TIME" -> "At $friendlyTime"
+                        else -> "Daily at $friendlyTime"
+                    }
+                }
+                TriggerType.SUNRISE -> {
+                    val offset = json.optInt("offsetMinutes", 0)
+                    val days = json.optString("days", "Daily")
+                    val offsetText = when {
+                        offset < 0 -> "${-offset}m before Sunrise"
+                        offset > 0 -> "${offset}m after Sunrise"
+                        else -> "At Sunrise"
+                    }
+                    if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) {
+                        offsetText
+                    } else {
+                        "$offsetText ($days)"
+                    }
+                }
+                TriggerType.SUNSET -> {
+                    val offset = json.optInt("offsetMinutes", 0)
+                    val days = json.optString("days", "Daily")
+                    val offsetText = when {
+                        offset < 0 -> "${-offset}m before Sunset"
+                        offset > 0 -> "${offset}m after Sunset"
+                        else -> "At Sunset"
+                    }
+                    if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) {
+                        offsetText
+                    } else {
+                        "$offsetText ($days)"
+                    }
+                }
+                TriggerType.LOCATION -> {
+                    val label = json.optString("label", "Geofence")
+                    val transition = json.optString("transition", "ENTER")
+                    val radius = json.optInt("radiusMeters", 150)
+                    val event = if (transition == "EXIT") "Leaving" else "Arriving at"
+                    "$event \"$label\" (${radius}m)"
+                }
+                TriggerType.WIFI -> {
+                    val ssid = json.optString("ssid", "Any Network")
+                    val state = if (json.optBoolean("connected", true)) "Connected to" else "Disconnected from"
+                    "$state \"$ssid\""
+                }
+                TriggerType.BLUETOOTH -> {
+                    val device = json.optString("device", "Any Device")
+                    val state = if (json.optBoolean("connected", true)) "Connected to" else "Disconnected from"
+                    "$state \"$device\""
+                }
+                TriggerType.BATTERY -> {
+                    val level = json.optInt("level", 20)
+                    val charging = json.optBoolean("charging", false)
+                    if (charging) "When Charging" else "Battery drops below $level%"
+                }
+                TriggerType.APP -> {
+                    val app = json.optString("appName", json.optString("packageName", "Selected App"))
+                    "When $app opens"
+                }
+            }
+        } catch (e: Exception) {
+            type.displayName
+        }
+    }
+
     fun toJsonObject(): JSONObject {
         return JSONObject().apply {
             put("type", type.name)
@@ -222,7 +385,11 @@ data class Routine(
     val restoreOnEnd: Boolean = true,
 
     @ColumnInfo(name = "createdAt")
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+
+    /** [MATCH_ALL]: every condition must be met. [MATCH_ANY]: one met condition is enough. */
+    @ColumnInfo(name = "matchMode", defaultValue = "ALL")
+    val matchMode: String = MATCH_ALL
 ) {
     // Backward compatibility getters
     val title: String get() = name
@@ -243,133 +410,25 @@ data class Routine(
     fun parseActions(): List<RoutineActionItem> = actions
 
     fun getTriggerSummary(): String {
-        val trigger = triggers.firstOrNull() ?: return "Manual"
-        return try {
-            val json = JSONObject(trigger.configJson)
-            when (trigger.type) {
-                TriggerType.TIME -> {
-                    val mode = json.optString("scheduleMode", "DAILY")
-                    val start = json.optString("startTime", "08:00")
-                    val days = json.optString("days", "Daily")
-                    val interval = json.optInt("intervalMinutes", 0)
-                    val parsed = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(start)
-                    val friendlyTime = if (parsed != null) {
-                        com.vpmapps.pixelflow.util.TimeParser.format12Hour(parsed.first, parsed.second)
-                    } else start
-
-                    when (mode) {
-                        "INTERVAL" -> if (interval >= 60) "Every ${interval / 60}h" else "Every ${interval}m"
-                        "WEEKLY" -> "Weekly ($days) at $friendlyTime"
-                        "SPECIFIC_TIME" -> "At $friendlyTime"
-                        else -> "Daily at $friendlyTime"
-                    }
-                }
-                TriggerType.SUNRISE -> {
-                    val offset = json.optInt("offsetMinutes", 0)
-                    val days = json.optString("days", "Daily")
-                    val offsetText = when {
-                        offset < 0 -> "${-offset}m before Sunrise"
-                        offset > 0 -> "${offset}m after Sunrise"
-                        else -> "At Sunrise"
-                    }
-                    if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) {
-                        offsetText
-                    } else {
-                        "$offsetText ($days)"
-                    }
-                }
-                TriggerType.SUNSET -> {
-                    val offset = json.optInt("offsetMinutes", 0)
-                    val days = json.optString("days", "Daily")
-                    val offsetText = when {
-                        offset < 0 -> "${-offset}m before Sunset"
-                        offset > 0 -> "${offset}m after Sunset"
-                        else -> "At Sunset"
-                    }
-                    if (days.isBlank() || days.equals("Daily", ignoreCase = true) || days.equals("Every Day", ignoreCase = true)) {
-                        offsetText
-                    } else {
-                        "$offsetText ($days)"
-                    }
-                }
-                TriggerType.LOCATION -> {
-                    val label = json.optString("label", "Geofence")
-                    val transition = json.optString("transition", "ENTER")
-                    val radius = json.optInt("radiusMeters", 150)
-                    val event = if (transition == "EXIT") "Leaving" else "Arriving at"
-                    "$event \"$label\" (${radius}m)"
-                }
-                TriggerType.WIFI -> {
-                    val ssid = json.optString("ssid", "Any Network")
-                    val state = if (json.optBoolean("connected", true)) "Connected to" else "Disconnected from"
-                    "$state \"$ssid\""
-                }
-                TriggerType.BLUETOOTH -> {
-                    val device = json.optString("device", "Any Device")
-                    val state = if (json.optBoolean("connected", true)) "Connected to" else "Disconnected from"
-                    "$state \"$device\""
-                }
-                TriggerType.BATTERY -> {
-                    val level = json.optInt("level", 20)
-                    val charging = json.optBoolean("charging", false)
-                    if (charging) "When Charging" else "Battery drops below $level%"
-                }
-                TriggerType.APP -> {
-                    val app = json.optString("appName", json.optString("packageName", "Selected App"))
-                    "When $app opens"
-                }
-            }
-        } catch (e: Exception) {
-            trigger.type.displayName
-        }
+        if (triggers.isEmpty()) return "Manual"
+        val joiner = if (matchMode == MATCH_ANY) " or " else " and "
+        return triggers.joinToString(joiner) { it.summary() }
     }
 
+    /** The routine's single time-based condition (time, sunrise or sunset), if it has one. */
+    val timeCondition: RoutineTrigger?
+        get() = triggers.firstOrNull { it.type.isTimeBased }
+
+    fun condition(type: TriggerType): RoutineTrigger? = triggers.firstOrNull { it.type == type }
+
+    fun hasCondition(type: TriggerType): Boolean = triggers.any { it.type == type }
+
     /**
-     * Checks if this routine is currently running in its scheduled active time window.
+     * True while the routine's time window (if it has one) covers the current time.
      */
     fun isCurrentlyInActiveWindow(): Boolean {
         if (!isEnabled) return false
-        val trigger = triggers.firstOrNull() ?: return false
-        if (trigger.type != TriggerType.TIME) return false
-
-        return try {
-            val json = JSONObject(trigger.configJson)
-            val startTimeStr = json.optString("startTime", "")
-            val endTimeStr = json.optString("endTime", "")
-            val daysStr = json.optString("days", "Daily")
-
-            val now = java.util.Calendar.getInstance()
-            val dayName = when (now.get(java.util.Calendar.DAY_OF_WEEK)) {
-                java.util.Calendar.MONDAY -> "Mon"
-                java.util.Calendar.TUESDAY -> "Tue"
-                java.util.Calendar.WEDNESDAY -> "Wed"
-                java.util.Calendar.THURSDAY -> "Thu"
-                java.util.Calendar.FRIDAY -> "Fri"
-                java.util.Calendar.SATURDAY -> "Sat"
-                java.util.Calendar.SUNDAY -> "Sun"
-                else -> ""
-            }
-
-            if (daysStr != "Daily" && daysStr != "Every Day" && !daysStr.contains(dayName, ignoreCase = true)) {
-                return false
-            }
-
-            val parsedStart = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(startTimeStr) ?: return false
-            val parsedEnd = com.vpmapps.pixelflow.util.TimeParser.parseToHourMinute(endTimeStr) ?: return false
-
-            val startMin = parsedStart.first * 60 + parsedStart.second
-            val endMin = parsedEnd.first * 60 + parsedEnd.second
-            if (startMin == endMin) return false
-
-            val currentMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
-            if (startMin <= endMin) {
-                currentMinutes in startMin..endMin
-            } else {
-                currentMinutes >= startMin || currentMinutes <= endMin
-            }
-        } catch (e: Exception) {
-            false
-        }
+        return timeCondition?.isWithinTimeWindow(java.util.Calendar.getInstance()) == true
     }
 
     @Ignore
@@ -403,6 +462,9 @@ data class Routine(
     )
 
     companion object {
+        const val MATCH_ALL = "ALL"
+        const val MATCH_ANY = "ANY"
+
         fun parseActionsJson(jsonStr: String): List<RoutineActionItem> {
             val list = mutableListOf<RoutineActionItem>()
             if (jsonStr.isBlank()) return list

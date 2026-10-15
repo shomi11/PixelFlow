@@ -463,7 +463,7 @@ fun DashboardScreen(
             }
 
             // Exact alarms: without "Alarms & reminders" timed routines fire late (off by default on Android 14+)
-            val enabledTypes = routines.filter { it.isEnabled }.map { it.triggerType }.toSet()
+            val enabledTypes = routines.filter { it.isEnabled }.flatMap { routine -> routine.triggers.map { it.type } }.toSet()
             val needsExactAlarms = enabledTypes.any { it == TriggerType.TIME || it == TriggerType.SUNRISE || it == TriggerType.SUNSET }
             if (needsExactAlarms && !canScheduleExactAlarms) {
                 item {
@@ -834,7 +834,8 @@ fun RoutineCard(
     val actions = remember(routine.actionsJson) { routine.parseActions() }
 
     val isExecutingNow = isRunning || routine.lastExecutionStatus == "RUNNING"
-    val isInActiveSchedule = routine.isCurrentlyInActiveWindow()
+    val isInActiveSchedule = routine.isEnabled &&
+        com.vpmapps.pixelflow.background.RoutineActivationStore.isActive(context, routine.id)
     val hasActiveSnapshot = remember(isExecutingNow, routine.id) {
         com.vpmapps.pixelflow.service.RoutineStateSnapshotManager.hasSnapshot(context, routine.id)
     }
@@ -965,12 +966,10 @@ fun RoutineCard(
                 }
             }
 
-            val isScheduledRoutine = routine.triggerType == TriggerType.TIME ||
-                    routine.triggerType == TriggerType.SUNRISE ||
-                    routine.triggerType == TriggerType.SUNSET
+            val isScheduledRoutine = routine.timeCondition != null
 
             if (isScheduledRoutine && routine.isEnabled) {
-                val nextMillis = remember(routine.triggerConfigJson, routine.isEnabled) {
+                val nextMillis = remember(routine.triggers, routine.isEnabled) {
                     RoutineAlarmManager.calculateNextTriggerMillis(context, routine)
                 }
                 if (nextMillis != null) {

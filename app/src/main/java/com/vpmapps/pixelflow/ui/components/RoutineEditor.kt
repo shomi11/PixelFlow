@@ -91,6 +91,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -191,9 +192,18 @@ fun RoutineEditor(
         mutableStateOf(initialRoutine?.restoreOnEnd ?: true)
     }
 
-    // 2. Predefined Trigger Selection State
+    // 2. Conditions ("If"): one or more condition types, matched with All or Any.
+    // selectedTriggerType is the condition whose settings are currently shown for editing.
+    val conditionTypes = remember(initialRoutine) {
+        mutableStateListOf<TriggerType>().apply {
+            addAll(initialRoutine?.triggers?.map { it.type }?.distinct()?.ifEmpty { null } ?: listOf(TriggerType.TIME))
+        }
+    }
     var selectedTriggerType by remember(initialRoutine) {
-        mutableStateOf(initialRoutine?.triggerType ?: TriggerType.TIME)
+        mutableStateOf(conditionTypes.first())
+    }
+    var matchMode by remember(initialRoutine) {
+        mutableStateOf(initialRoutine?.matchMode ?: Routine.MATCH_ALL)
     }
 
     // Scheduled Trigger State (AlarmManager Integration)
@@ -316,10 +326,10 @@ fun RoutineEditor(
 
     // Initialize trigger values from initialRoutine if present
     remember(initialRoutine) {
-        initialRoutine?.triggerConfigJson?.let { jsonStr ->
+        initialRoutine?.triggers?.forEach { trigger ->
             try {
-                val json = JSONObject(jsonStr)
-                when (initialRoutine.triggerType) {
+                val json = JSONObject(trigger.configJson)
+                when (trigger.type) {
                     TriggerType.TIME -> {
                         scheduleMode = json.optString("scheduleMode", "DAILY")
                         startTime = json.optString("startTime", "08:00")
@@ -483,9 +493,9 @@ fun RoutineEditor(
     }
 
     // Helper function to build trigger config JSON
-    fun buildTriggerConfig(): String {
+    fun buildTriggerConfig(type: TriggerType = selectedTriggerType): String {
         val json = JSONObject()
-        when (selectedTriggerType) {
+        when (type) {
             TriggerType.TIME -> {
                 val normalizedStart = TimeParser.parseToHourMinute(startTime)?.let {
                     TimeParser.format24Hour(it.first, it.second)
@@ -505,7 +515,7 @@ fun RoutineEditor(
                 json.put("useExactAlarm", true)
             }
             TriggerType.SUNRISE, TriggerType.SUNSET -> {
-                json.put("solarEvent", selectedTriggerType.name)
+                json.put("solarEvent", type.name)
                 json.put("offsetMinutes", solarOffsetMinutes)
                 json.put("days", solarDays)
                 json.put("latitude", userLocation.latitude)
@@ -542,6 +552,12 @@ fun RoutineEditor(
         }
         return json.toString()
     }
+
+    fun buildConditions(): List<RoutineTrigger> =
+        conditionTypes.map { RoutineTrigger(type = it, configJson = buildTriggerConfig(it)) }
+
+    fun conditionsSummary(): String =
+        Routine(name = "", triggers = buildConditions(), matchMode = matchMode).getTriggerSummary()
 
     // Helper function to build list of RoutineActionItem
     fun buildActions(): List<RoutineActionItem> {
@@ -638,12 +654,11 @@ fun RoutineEditor(
     val correspondingCommands = getCorrespondingShellCommands()
 
     // Real-time calculation of next trigger time via AlarmManager helper
-    val currentTriggerJson = buildTriggerConfig()
-    val nextScheduledTriggerMillis = remember(selectedTriggerType, scheduleMode, startTime, selectedDays, intervalMinutes, solarOffsetMinutes, solarDays, userLocation) {
-        if (selectedTriggerType == TriggerType.TIME ||
-            selectedTriggerType == TriggerType.SUNRISE ||
-            selectedTriggerType == TriggerType.SUNSET) {
-            RoutineAlarmManager.calculateNextTriggerMillis(context, selectedTriggerType, currentTriggerJson)
+    val timeConditionType = conditionTypes.firstOrNull { it.isTimeBased }
+    val currentTriggerJson = timeConditionType?.let { buildTriggerConfig(it) }
+    val nextScheduledTriggerMillis = remember(timeConditionType, scheduleMode, startTime, selectedDays, intervalMinutes, solarOffsetMinutes, solarDays, userLocation) {
+        if (timeConditionType != null && currentTriggerJson != null) {
+            RoutineAlarmManager.calculateNextTriggerMillis(context, timeConditionType, currentTriggerJson)
         } else null
     }
 
@@ -654,16 +669,13 @@ fun RoutineEditor(
     val handleSaveRoutine = {
         val finalName = routineName.trim().ifBlank { "Untitled Routine" }
         val actions = buildActions()
-        val trigger = RoutineTrigger(
-            type = selectedTriggerType,
-            configJson = buildTriggerConfig()
-        )
 
         val routine = Routine(
             id = initialRoutine?.id ?: 0L,
             name = finalName,
             isEnabled = initialRoutine?.isEnabled ?: true,
-            triggers = listOf(trigger),
+            triggers = buildConditions(),
+            matchMode = matchMode,
             actions = actions,
             description = description.trim(),
             iconName = selectedIcon,
@@ -851,7 +863,7 @@ fun RoutineEditor(
                         }
                     }
                     Text(
-                        text = "Select Trigger",
+                        text = "If",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -859,60 +871,146 @@ fun RoutineEditor(
                 }
 
                 Text(
-                    text = "Choose condition type from the predefined trigger list:",
+                    text = if (conditionTypes.size > 1) {
+                        "The routine runs when ${if (matchMode == Routine.MATCH_ANY) "any" else "all"} of these conditions are met. Tap a condition to edit it."
+                    } else {
+                        "Add more conditions to combine them, e.g. a Wi-Fi network and a time."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TriggerType.values().forEach { type ->
-                        val isSelected = selectedTriggerType == type
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                haptics.selectionTick()
-                                selectedTriggerType = type
-                            },
-                            label = { Text(type.displayName, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
-                            leadingIcon = {
-                                val icon = when (type) {
-                                    TriggerType.TIME -> Icons.Default.Alarm
-                                    TriggerType.SUNRISE -> Icons.Default.LightMode
-                                    TriggerType.SUNSET -> Icons.Default.Nightlight
-                                    TriggerType.LOCATION -> Icons.Default.LocationOn
-                                    TriggerType.WIFI -> Icons.Default.Wifi
-                                    TriggerType.BLUETOOTH -> Icons.Default.Bluetooth
-                                    TriggerType.BATTERY -> Icons.Default.BatteryChargingFull
-                                    TriggerType.APP -> Icons.Default.PlayArrow
-                                }
-                                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                selectedLabelColor = Color(0xFF1D4ED8),
-                                selectedLeadingIconColor = Color(0xFF2563EB),
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = isSelected,
-                                borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                selectedBorderColor = Color(0xFF2563EB),
-                                borderWidth = 1.dp,
-                                selectedBorderWidth = 1.5.dp
-                            ),
+                // Current conditions
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    conditionTypes.forEachIndexed { index, type ->
+                        if (index > 0) {
+                            Text(
+                                text = if (matchMode == Routine.MATCH_ANY) "or" else "and",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 16.dp)
+                            )
+                        }
+                        val isFocused = selectedTriggerType == type
+                        Surface(
                             shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.testTag("trigger_type_chip_${type.name}")
-                        )
+                            color = if (isFocused) Color(0xFF2563EB).copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (isFocused) 1.5.dp else 1.dp,
+                                if (isFocused) Color(0xFF2563EB) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    haptics.selectionTick()
+                                    selectedTriggerType = type
+                                }
+                                .testTag("condition_row_${type.name}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = triggerTypeIcon(type),
+                                    contentDescription = null,
+                                    tint = if (isFocused) Color(0xFF2563EB) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = type.displayName,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = RoutineTrigger(type = type, configJson = buildTriggerConfig(type)).summary(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (conditionTypes.size > 1) {
+                                    IconButton(
+                                        onClick = {
+                                            haptics.buttonClick()
+                                            conditionTypes.remove(type)
+                                            if (selectedTriggerType == type) selectedTriggerType = conditionTypes.first()
+                                        },
+                                        modifier = Modifier.testTag("condition_remove_${type.name}")
+                                    ) {
+                                        Icon(Icons.Default.Close, contentDescription = "Remove condition")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // All / Any
+                if (conditionTypes.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(Routine.MATCH_ALL to "All conditions", Routine.MATCH_ANY to "Any condition").forEach { (mode, label) ->
+                            FilterChip(
+                                selected = matchMode == mode,
+                                onClick = {
+                                    haptics.selectionTick()
+                                    matchMode = mode
+                                },
+                                label = { Text(label) },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.testTag("match_mode_$mode")
+                            )
+                        }
+                    }
+                }
+
+                // Add another condition. Time, sunrise and sunset share one alarm, so only one of them.
+                val hasTimeCondition = conditionTypes.any { it.isTimeBased }
+                val addableTypes = TriggerType.values().filter { it !in conditionTypes && !(it.isTimeBased && hasTimeCondition) }
+                if (addableTypes.isNotEmpty()) {
+                    Text(
+                        text = "Add condition",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        addableTypes.forEach { type ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    haptics.selectionTick()
+                                    conditionTypes.add(type)
+                                    selectedTriggerType = type
+                                },
+                                label = { Text(type.displayName, fontWeight = FontWeight.Medium) },
+                                leadingIcon = {
+                                    Icon(triggerTypeIcon(type), contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.testTag("trigger_type_chip_${type.name}")
+                            )
+                        }
                     }
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text(
+                    text = "${selectedTriggerType.displayName} settings",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
                 // Detailed configuration for the selected trigger
                 when (selectedTriggerType) {
@@ -4661,16 +4759,7 @@ fun RoutineEditor(
                     IconButton(
                         onClick = {
                             val actions = buildActions()
-                            val triggerSummary = when (selectedTriggerType) {
-                                TriggerType.TIME -> "Time trigger ($startTime, $scheduleMode, $selectedDays)"
-                                TriggerType.SUNRISE -> "Sunrise trigger (Solar offset: ${solarOffsetMinutes}m, $solarDays)"
-                                TriggerType.SUNSET -> "Sunset trigger (Solar offset: ${solarOffsetMinutes}m, $solarDays)"
-                                TriggerType.LOCATION -> "Location trigger (${geoLabel.ifBlank { "Location" }}, radius: ${geoRadiusMeters}m, $geoTransition)"
-                                TriggerType.WIFI -> "Wi-Fi trigger ($wifiSsid)"
-                                TriggerType.BLUETOOTH -> "Bluetooth trigger ($btDevice)"
-                                TriggerType.BATTERY -> "Battery trigger (${batteryLevel.toInt()}%, ${if (batteryCharging) "Charging" else "Discharging"})"
-                                TriggerType.APP -> "App launch trigger ($appName${if (appPackage.isNotBlank()) " [$appPackage]" else ""})"
-                            }
+                            val triggerSummary = conditionsSummary()
                             val shareContent = buildString {
                                 appendLine("⚡ Routine: ${routineName.trim().ifBlank { "Untitled Routine" }}")
                                 if (description.isNotBlank()) appendLine("Description: $description")
@@ -4721,16 +4810,7 @@ fun RoutineEditor(
     // Info Dialog
     if (showInfoDialog) {
         val configuredActions = buildActions()
-        val triggerSummary = when (selectedTriggerType) {
-            TriggerType.TIME -> "Time: $startTime ($scheduleMode, Days: $selectedDays)"
-            TriggerType.SUNRISE -> "Sunrise (Solar offset: ${solarOffsetMinutes}m, Days: $solarDays)"
-            TriggerType.SUNSET -> "Sunset (Solar offset: ${solarOffsetMinutes}m, Days: $solarDays)"
-            TriggerType.LOCATION -> "Location: ${geoLabel.ifBlank { "Custom Location" }} (${geoRadiusMeters}m radius, $geoTransition)"
-            TriggerType.WIFI -> "Wi-Fi: SSID ${wifiSsid.ifBlank { "Any" }} (${if (wifiConnected) "Connected" else "Disconnected"})"
-            TriggerType.BLUETOOTH -> "Bluetooth: ${btDevice.ifBlank { "Any device" }} (${if (btConnected) "Connected" else "Disconnected"})"
-            TriggerType.APP -> "App launch: ${appName.ifBlank { "Custom app" }}${if (appPackage.isNotBlank()) " ($appPackage)" else ""}"
-            TriggerType.BATTERY -> "Battery: ${batteryLevel.toInt()}% (${if (batteryCharging) "Charging" else "Discharging"})"
-        }
+        val triggerSummary = conditionsSummary()
 
         AlertDialog(
             onDismissRequest = { showInfoDialog = false },
@@ -4790,7 +4870,7 @@ fun RoutineEditor(
                             text = triggerSummary,
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        if (selectedTriggerType == TriggerType.TIME || selectedTriggerType == TriggerType.SUNRISE || selectedTriggerType == TriggerType.SUNSET) {
+                        if (conditionTypes.any { it.isTimeBased }) {
                             Text(
                                 text = "✓ Precision AlarmManager RTC_WAKEUP active",
                                 style = MaterialTheme.typography.labelSmall,
@@ -5065,3 +5145,13 @@ fun InstalledAppIcon(
     }
 }
 
+private fun triggerTypeIcon(type: TriggerType): androidx.compose.ui.graphics.vector.ImageVector = when (type) {
+    TriggerType.TIME -> Icons.Default.Alarm
+    TriggerType.SUNRISE -> Icons.Default.LightMode
+    TriggerType.SUNSET -> Icons.Default.Nightlight
+    TriggerType.LOCATION -> Icons.Default.LocationOn
+    TriggerType.WIFI -> Icons.Default.Wifi
+    TriggerType.BLUETOOTH -> Icons.Default.Bluetooth
+    TriggerType.BATTERY -> Icons.Default.BatteryChargingFull
+    TriggerType.APP -> Icons.Default.PlayArrow
+}

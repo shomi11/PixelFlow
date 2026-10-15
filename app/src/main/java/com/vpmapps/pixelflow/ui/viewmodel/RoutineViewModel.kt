@@ -4,13 +4,18 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.vpmapps.pixelflow.background.RoutineAlarmManager
+import com.vpmapps.pixelflow.background.DeviceFactsStore
+import com.vpmapps.pixelflow.background.GeofenceManager
+import com.vpmapps.pixelflow.background.RoutineActivationStore
+import com.vpmapps.pixelflow.background.TriggerEvaluator
 import com.vpmapps.pixelflow.background.TriggerMonitorService
+import com.vpmapps.pixelflow.service.RoutineStateSnapshotManager
+import com.vpmapps.pixelflow.widget.WidgetUpdateHelper
 import com.vpmapps.pixelflow.background.WorkManagerHelper
 import com.vpmapps.pixelflow.data.local.AppDatabase
 import com.vpmapps.pixelflow.data.model.Routine
 import com.vpmapps.pixelflow.data.model.RoutineEntity
 import com.vpmapps.pixelflow.data.model.RoutineExecutionLog
-import com.vpmapps.pixelflow.data.model.TriggerType
 import com.vpmapps.pixelflow.data.repository.RoutineRepository
 import com.vpmapps.pixelflow.notification.RoutineNotificationManager
 import com.vpmapps.pixelflow.service.RoutineExecutionEngine
@@ -164,6 +169,38 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     // --- Routine State Toggling Methods ---
 
     /**
+     * Sets up everything an enabled routine needs to notice its conditions, then checks them right
+     * away so a routine whose conditions are already met starts immediately.
+     */
+    private fun armRoutine(routine: Routine) {
+        val app = getApplication<Application>()
+        RoutineAlarmManager.scheduleExactRoutineAlarm(app, routine)
+        GeofenceManager.registerGeofence(app, routine)
+        RoutineAlarmManager.scheduleRoutineCustomNotifications(app, routine)
+        TriggerMonitorService.refresh(app)
+        TriggerEvaluator.evaluateAsync(app, routine.id)
+    }
+
+    /**
+     * Removes a routine's alarms and geofence. When [restoreReason] is set and the routine is
+     * currently on, its previous settings are restored.
+     */
+    private suspend fun disarmRoutine(routine: Routine?, routineId: Long, restoreReason: String?) {
+        val app = getApplication<Application>()
+        RoutineAlarmManager.cancelRoutineAlarm(app, routineId)
+        RoutineAlarmManager.cancelCustomNotificationAlarm(app, routineId)
+        GeofenceManager.removeGeofence(app, routineId)
+        DeviceFactsStore.clearGeofence(app, routineId)
+        RoutineActivationStore.clear(app, routineId)
+        if (routine != null && restoreReason != null && routine.restoreOnEnd &&
+            RoutineStateSnapshotManager.hasSnapshot(app, routineId)
+        ) {
+            executionEngine.restoreRoutineSettings(routine, restoreReason)
+        }
+        TriggerMonitorService.refresh(app)
+    }
+
+    /**
      * Toggles the enabled status of the given routine.
      */
     fun toggleRoutineEnabled(routine: Routine) {
@@ -171,24 +208,11 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
             val newState = !routine.isEnabled
             repository.toggleRoutine(routine.id, newState)
             if (newState) {
-                if (routine.triggerType == TriggerType.TIME ||
-                    routine.triggerType == TriggerType.SUNRISE ||
-                    routine.triggerType == TriggerType.SUNSET) {
-                    RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), routine.copy(isEnabled = true))
-                } else if (routine.triggerType == TriggerType.LOCATION) {
-                    com.vpmapps.pixelflow.background.GeofenceManager.registerGeofence(getApplication(), routine.copy(isEnabled = true))
-                }
-                RoutineAlarmManager.scheduleRoutineCustomNotifications(getApplication(), routine.copy(isEnabled = true))
+                armRoutine(routine.copy(isEnabled = true))
             } else {
-                RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
-                RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routine.id)
-                com.vpmapps.pixelflow.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
-                if (routine.restoreOnEnd && com.vpmapps.pixelflow.service.RoutineStateSnapshotManager.hasSnapshot(getApplication(), routine.id)) {
-                    executionEngine.restoreRoutineSettings(routine, "Routine Disabled")
-                }
+                disarmRoutine(routine, routine.id, restoreReason = "Routine Disabled")
             }
-            TriggerMonitorService.refresh(getApplication())
-            com.vpmapps.pixelflow.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine \"${routine.title}\" ${if (newState) "enabled" else "disabled"}")
         }
     }
@@ -199,25 +223,14 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
     fun toggleRoutineEnabled(routineId: Long, isEnabled: Boolean) {
         viewModelScope.launch {
             repository.toggleRoutine(routineId, isEnabled)
+            val routine = repository.getRoutineById(routineId)
             if (isEnabled) {
-                repository.getRoutineById(routineId)?.let {
-                    if (it.triggerType == TriggerType.TIME ||
-                        it.triggerType == TriggerType.SUNRISE ||
-                        it.triggerType == TriggerType.SUNSET) {
-                        RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), it.copy(isEnabled = true))
-                    } else if (it.triggerType == TriggerType.LOCATION) {
-                        com.vpmapps.pixelflow.background.GeofenceManager.registerGeofence(getApplication(), it.copy(isEnabled = true))
-                    }
-                    RoutineAlarmManager.scheduleRoutineCustomNotifications(getApplication(), it.copy(isEnabled = true))
-                }
+                routine?.let { armRoutine(it.copy(isEnabled = true)) }
             } else {
-                RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
-                RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routineId)
-                com.vpmapps.pixelflow.background.GeofenceManager.removeGeofence(getApplication(), routineId)
+                disarmRoutine(routine, routineId, restoreReason = "Routine Disabled")
             }
             _userMessage.emit("Routine ${if (isEnabled) "enabled" else "disabled"}")
-            TriggerMonitorService.refresh(getApplication())
-            com.vpmapps.pixelflow.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
         }
     }
 
@@ -239,24 +252,18 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteRoutine(routine: Routine) {
         viewModelScope.launch {
-            RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routine.id)
-            RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routine.id)
-            com.vpmapps.pixelflow.background.GeofenceManager.removeGeofence(getApplication(), routine.id)
+            disarmRoutine(routine, routine.id, restoreReason = "Routine Deleted")
             repository.deleteRoutine(routine)
-            TriggerMonitorService.refresh(getApplication())
-            com.vpmapps.pixelflow.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine \"${routine.title}\" deleted")
         }
     }
 
     fun deleteRoutine(routineId: Long) {
         viewModelScope.launch {
-            RoutineAlarmManager.cancelRoutineAlarm(getApplication(), routineId)
-            RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), routineId)
-            com.vpmapps.pixelflow.background.GeofenceManager.removeGeofence(getApplication(), routineId)
+            disarmRoutine(repository.getRoutineById(routineId), routineId, restoreReason = "Routine Deleted")
             repository.deleteRoutineById(routineId)
-            TriggerMonitorService.refresh(getApplication())
-            com.vpmapps.pixelflow.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
             _userMessage.emit("Routine deleted")
         }
     }
@@ -273,20 +280,16 @@ class RoutineViewModel(application: Application) : AndroidViewModel(application)
                 routine
             }
             if (savedRoutine.isEnabled) {
-                if (savedRoutine.triggerType == TriggerType.TIME ||
-                    savedRoutine.triggerType == TriggerType.SUNRISE ||
-                    savedRoutine.triggerType == TriggerType.SUNSET
-                ) {
-                    RoutineAlarmManager.scheduleExactRoutineAlarm(getApplication(), savedRoutine)
-                } else if (savedRoutine.triggerType == TriggerType.LOCATION) {
-                    com.vpmapps.pixelflow.background.GeofenceManager.registerGeofence(getApplication(), savedRoutine)
-                }
-                RoutineAlarmManager.scheduleRoutineCustomNotifications(getApplication(), savedRoutine)
+                // Clear alarms/geofence of conditions that were removed, then arm the current ones.
+                // The routine's on/off state is kept, so an edit that still matches doesn't re-run it.
+                val app = getApplication<Application>()
+                RoutineAlarmManager.cancelRoutineAlarm(app, savedRoutine.id)
+                GeofenceManager.removeGeofence(app, savedRoutine.id)
+                armRoutine(savedRoutine)
             } else {
                 RoutineAlarmManager.cancelCustomNotificationAlarm(getApplication(), savedRoutine.id)
             }
-            TriggerMonitorService.refresh(getApplication())
-            com.vpmapps.pixelflow.widget.WidgetUpdateHelper.updateAllWidgets(getApplication())
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
             onComplete()
         }
     }

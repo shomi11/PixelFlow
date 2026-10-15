@@ -68,7 +68,7 @@ class TriggerMonitorService : Service() {
             CoroutineScope(Dispatchers.IO).launch {
                 val needed = try {
                     AppDatabase.getDatabase(appContext).routineDao().getActiveRoutines()
-                        .any { it.triggerType in MONITORED_TYPES }
+                        .any { routine -> routine.triggers.any { it.type in MONITORED_TYPES } }
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to check monitored routines", e)
                     return@launch
@@ -161,7 +161,7 @@ class TriggerMonitorService : Service() {
 
     private suspend fun reloadMonitors() {
         val types = try {
-            AppDatabase.getDatabase(this).routineDao().getActiveRoutines().map { it.triggerType }.toSet()
+            AppDatabase.getDatabase(this).routineDao().getActiveRoutines().flatMap { routine -> routine.triggers.map { it.type } }.toSet()
         } catch (e: Exception) {
             Log.e(TAG, "Failed loading routines", e)
             return
@@ -353,10 +353,7 @@ class TriggerMonitorService : Service() {
                 if (latest != null && latest != foregroundPackage) {
                     val previous = foregroundPackage
                     foregroundPackage = latest
-                    // The first reading only establishes a baseline after (re)start
-                    if (previous != null) {
-                        TriggerEvaluator.onForegroundAppChanged(applicationContext, previous, latest)
-                    }
+                    TriggerEvaluator.onForegroundAppChanged(applicationContext, previous, latest)
                 }
                 delay(1_500)
             }

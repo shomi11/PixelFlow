@@ -85,9 +85,9 @@ object RoutineAlarmManager {
             return
         }
 
-        if (routine.triggerType != TriggerType.TIME &&
-            routine.triggerType != TriggerType.SUNRISE &&
-            routine.triggerType != TriggerType.SUNSET) {
+        val timeCondition = routine.timeCondition
+        if (timeCondition == null) {
+            cancelRoutineAlarm(context, routine.id)
             return
         }
 
@@ -142,12 +142,14 @@ object RoutineAlarmManager {
             }
         }
 
-        // Schedule restore alarm when time schedule routine reaches its configured end time
-        if (routine.restoreOnEnd && routine.triggerType == TriggerType.TIME) {
-            val nextEndMillis = calculateNextEndTriggerMillis(routine.triggerConfigJson)
+        // A time window also needs an alarm at its end, so the routine is turned off on time
+        if (timeCondition.isTimeWindow) {
+            val nextEndMillis = calculateNextEndTriggerMillis(timeCondition.configJson)
             if (nextEndMillis != null && nextEndMillis > System.currentTimeMillis()) {
                 scheduleExactEndAlarm(context, routine.id, nextEndMillis)
             }
+        } else {
+            cancelEndAlarm(context, routine.id)
         }
     }
 
@@ -275,9 +277,7 @@ object RoutineAlarmManager {
                 val db = AppDatabase.getDatabase(context)
                 val activeRoutines = db.routineDao().getActiveRoutines()
                 for (routine in activeRoutines) {
-                    if (routine.triggerType == TriggerType.TIME ||
-                        routine.triggerType == TriggerType.SUNRISE ||
-                        routine.triggerType == TriggerType.SUNSET) {
+                    if (routine.timeCondition != null) {
                         scheduleExactRoutineAlarm(context, routine)
                     }
                     scheduleRoutineCustomNotifications(context, routine)
@@ -434,7 +434,8 @@ object RoutineAlarmManager {
      * Calculates the exact epoch timestamp (in millis) for the given Routine.
      */
     fun calculateNextTriggerMillis(context: Context, routine: Routine): Long? {
-        return calculateNextTriggerMillis(context, routine.triggerType, routine.triggerConfigJson)
+        val timeCondition = routine.timeCondition ?: return null
+        return calculateNextTriggerMillis(context, timeCondition.type, timeCondition.configJson)
     }
 
     /**

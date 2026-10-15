@@ -104,7 +104,8 @@ class SingleRoutineWidgetProvider : AppWidgetProvider() {
                 )
 
                 val isExecuting = RoutineExecutionTracker.isRunning(routine.id) || routine.lastExecutionStatus == "RUNNING"
-                val isInActiveSchedule = routine.isCurrentlyInActiveWindow()
+                val isInActiveSchedule = routine.isEnabled &&
+                    com.vpmapps.pixelflow.background.RoutineActivationStore.isActive(context, routine.id)
                 val isCurrentlyRunning = isExecuting || isInActiveSchedule
 
                 if (isCurrentlyRunning) {

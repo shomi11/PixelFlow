@@ -34,7 +34,8 @@ object GeofenceManager {
      */
     @SuppressLint("MissingPermission")
     fun registerGeofence(context: Context, routine: Routine) {
-        if (!routine.isEnabled || routine.triggerType != TriggerType.LOCATION) {
+        val condition = routine.condition(TriggerType.LOCATION)
+        if (!routine.isEnabled || condition == null) {
             removeGeofence(context, routine.id)
             return
         }
@@ -45,7 +46,7 @@ object GeofenceManager {
         }
 
         try {
-            val json = JSONObject(routine.triggerConfigJson)
+            val json = JSONObject(condition.configJson)
             val lat = json.optDouble("latitude", 0.0)
             val lng = json.optDouble("longitude", 0.0)
             val radius = json.optDouble("radiusMeters", 150.0).toFloat()
@@ -59,6 +60,8 @@ object GeofenceManager {
             val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
             val pendingIntent = createGeofencePendingIntent(context, routine.id, lat, lng, radius.toInt(), transition)
 
+            // The area may have changed; re-estimate inside/outside until the first crossing arrives
+            DeviceFactsStore.clearGeofence(context, routine.id)
             // -1L indicates expiration in infinity (active until removed)
             locationManager.addProximityAlert(lat, lng, radius, -1L, pendingIntent)
             Log.i(TAG, "Registered proximity geofence for \"${routine.name}\" (ID: ${routine.id}) at ($lat, $lng, r=${radius}m, on=$transition)")
@@ -92,7 +95,7 @@ object GeofenceManager {
                 val db = AppDatabase.getDatabase(context)
                 val activeRoutines = db.routineDao().getActiveRoutines()
                 for (routine in activeRoutines) {
-                    if (routine.triggerType == TriggerType.LOCATION) {
+                    if (routine.hasCondition(TriggerType.LOCATION)) {
                         registerGeofence(context, routine)
                     }
                 }
