@@ -1,5 +1,6 @@
 package com.vpmapps.pixelflow.ui.components
 
+import com.vpmapps.pixelflow.ui.theme.extendedColors
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -108,7 +109,7 @@ fun ShizukuStatusIndicator(
                 modifier = modifier
                     .fillMaxWidth()
                     .testTag("shizuku_status_authorized_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.elevatedCardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -127,13 +128,13 @@ fun ShizukuStatusIndicator(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF2E7D32).copy(alpha = 0.15f)),
+                                    .background(MaterialTheme.extendedColors.success.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Authorized",
-                                    tint = Color(0xFF2E7D32),
+                                    tint = MaterialTheme.extendedColors.success,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -145,21 +146,20 @@ fun ShizukuStatusIndicator(
                                     Text(
                                         text = "Shizuku ADB Active",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFF2E7D32).copy(alpha = 0.15f))
+                                            .clip(MaterialTheme.shapes.extraSmall)
+                                            .background(MaterialTheme.extendedColors.success.copy(alpha = 0.15f))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(
                                             text = "API v$version",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF2E7D32)
+                                            color = MaterialTheme.extendedColors.success
                                         )
                                     }
                                 }
@@ -188,7 +188,7 @@ fun ShizukuStatusIndicator(
                             if (onOpenDiagnostics != null) {
                                 OutlinedButton(
                                     onClick = onOpenDiagnostics,
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.testTag("banner_diagnostics_btn")
                                 ) {
                                     Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -200,7 +200,7 @@ fun ShizukuStatusIndicator(
                             if (onOpenConsole != null) {
                                 OutlinedButton(
                                     onClick = onOpenConsole,
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.testTag("banner_console_btn")
                                 ) {
                                     Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -220,12 +220,12 @@ fun ShizukuStatusIndicator(
                 modifier = modifier
                     .fillMaxWidth()
                     .testTag("shizuku_status_permission_required_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFFFF3E0),
-                    contentColor = Color(0xFF5D4037)
+                    containerColor = MaterialTheme.extendedColors.warningContainer,
+                    contentColor = MaterialTheme.extendedColors.onWarningContainer
                 ),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFB74D))
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.extendedColors.warning)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -239,13 +239,13 @@ fun ShizukuStatusIndicator(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF57C00).copy(alpha = 0.2f)),
+                                .background(MaterialTheme.extendedColors.warning.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = "Permission Required",
-                                tint = Color(0xFFE65100),
+                                tint = MaterialTheme.extendedColors.warning,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -255,15 +255,14 @@ fun ShizukuStatusIndicator(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Permission Required: Shizuku Access",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFB71C1C)
+                                style = MaterialTheme.typography.titleMediumEmphasized,
+                                color = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Shizuku service is running on your device, but PixelFlow does not have permission to execute ADB shell commands. Automated rules cannot modify system settings until permission is granted.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF4E342E)
+                                color = MaterialTheme.extendedColors.onWarningContainer
                             )
                         }
 
@@ -271,7 +270,7 @@ fun ShizukuStatusIndicator(
                             onClick = onRefresh,
                             modifier = Modifier.testTag("shizuku_refresh_status_btn")
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFFE65100))
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.extendedColors.warning)
                         }
                     }
 
@@ -284,10 +283,10 @@ fun ShizukuStatusIndicator(
                         Button(
                             onClick = onRequestPermission,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFE65100),
-                                contentColor = Color.White
+                                containerColor = MaterialTheme.extendedColors.warning,
+                                contentColor = MaterialTheme.extendedColors.onWarning
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.testTag("shizuku_grant_permission_btn")
                         ) {
                             Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -299,11 +298,11 @@ fun ShizukuStatusIndicator(
                             onClick = {
                                 if (onReconnect != null) onReconnect() else onRefresh()
                             },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFFE65100)
+                                contentColor = MaterialTheme.extendedColors.warning
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE65100)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.extendedColors.warning),
                             modifier = Modifier.testTag("shizuku_perm_reconnect_btn")
                         ) {
                             Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -314,11 +313,11 @@ fun ShizukuStatusIndicator(
                         if (onOpenDiagnostics != null) {
                             OutlinedButton(
                                 onClick = onOpenDiagnostics,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color(0xFFE65100)
+                                    contentColor = MaterialTheme.extendedColors.warning
                                 ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE65100)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.extendedColors.warning),
                                 modifier = Modifier.testTag("shizuku_perm_diag_btn")
                             ) {
                                 Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -329,11 +328,11 @@ fun ShizukuStatusIndicator(
 
                         OutlinedButton(
                             onClick = onOpenSetupGuide,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFFE65100)
+                                contentColor = MaterialTheme.extendedColors.warning
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE65100)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.extendedColors.warning),
                             modifier = Modifier.testTag("shizuku_setup_guide_btn")
                         ) {
                             Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -351,7 +350,7 @@ fun ShizukuStatusIndicator(
                 modifier = modifier
                     .fillMaxWidth()
                     .testTag("shizuku_status_unavailable_card"),
-                shape = RoundedCornerShape(18.dp),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -386,8 +385,7 @@ fun ShizukuStatusIndicator(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Persistent Warning: Shizuku Not Running",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleMediumEmphasized,
                                 color = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -414,8 +412,8 @@ fun ShizukuStatusIndicator(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF1E1E24))
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.inverseSurface)
                             .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         Row(
@@ -427,7 +425,7 @@ fun ShizukuStatusIndicator(
                                 text = "adb shell sh /sdcard/Android/data/moe.shizuku.privileged.api/start.sh",
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.5.sp,
-                                color = Color(0xFF81C995),
+                                color = MaterialTheme.colorScheme.inversePrimary,
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(
@@ -445,7 +443,7 @@ fun ShizukuStatusIndicator(
                                 Icon(
                                     imageVector = if (copiedCommand) Icons.Default.Check else Icons.Default.ContentCopy,
                                     contentDescription = "Copy Command",
-                                    tint = if (copiedCommand) Color(0xFF81C995) else Color.LightGray,
+                                    tint = if (copiedCommand) MaterialTheme.colorScheme.inversePrimary else MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -458,7 +456,7 @@ fun ShizukuStatusIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("shizuku_wifi_disconnected_banner"),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
                         ) {
@@ -473,7 +471,6 @@ fun ShizukuStatusIndicator(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "Left Home Wi-Fi ($networkDescription)",
-                                        fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer
                                     )
@@ -507,7 +504,7 @@ fun ShizukuStatusIndicator(
                                 ) {
                                     OutlinedButton(
                                         onClick = { NetworkStatusMonitor.openHotspotSettings(context) },
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = MaterialTheme.shapes.small,
                                         colors = ButtonDefaults.outlinedButtonColors(
                                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                                         ),
@@ -520,7 +517,7 @@ fun ShizukuStatusIndicator(
 
                                     OutlinedButton(
                                         onClick = { NetworkStatusMonitor.openShizukuAppDetails(context) },
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = MaterialTheme.shapes.small,
                                         colors = ButtonDefaults.outlinedButtonColors(
                                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                                         ),
@@ -550,7 +547,7 @@ fun ShizukuStatusIndicator(
                                     onRefresh()
                                 }
                             },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -565,7 +562,7 @@ fun ShizukuStatusIndicator(
                         // 2. Connect & Authorize (attempts connection and dispatches permission prompt)
                         OutlinedButton(
                             onClick = onRequestPermission,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.testTag("shizuku_connect_btn")
                         ) {
                             Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -592,7 +589,7 @@ fun ShizukuStatusIndicator(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.testTag("shizuku_wireless_debugging_btn")
                         ) {
                             Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -614,7 +611,7 @@ fun ShizukuStatusIndicator(
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.testTag("shizuku_launch_app_btn")
                         ) {
                             Icon(Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -625,7 +622,7 @@ fun ShizukuStatusIndicator(
                         // 4. Re-check / Refresh status
                         OutlinedButton(
                             onClick = onRefresh,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.testTag("shizuku_check_status_btn")
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -637,7 +634,7 @@ fun ShizukuStatusIndicator(
                         if (onOpenDiagnostics != null) {
                             OutlinedButton(
                                 onClick = onOpenDiagnostics,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.testTag("shizuku_unavail_diag_btn")
                             ) {
                                 Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -649,7 +646,7 @@ fun ShizukuStatusIndicator(
                         // 6. Direct Link to Setup Guide
                         OutlinedButton(
                             onClick = onOpenSetupGuide,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.testTag("shizuku_setup_guide_btn")
                         ) {
                             Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -674,21 +671,21 @@ fun ShizukuStatusChip(
 ) {
     val (dotColor, label, bgTint, icon) = when (state) {
         ShizukuState.AUTHORIZED -> Quadruple(
-            Color(0xFF1E8E3E),
+            MaterialTheme.extendedColors.success,
             "Shizuku Active",
-            Color(0xFF1E8E3E).copy(alpha = 0.12f),
+            MaterialTheme.extendedColors.success.copy(alpha = 0.12f),
             Icons.Default.Check
         )
         ShizukuState.PERMISSION_REQUIRED -> Quadruple(
-            Color(0xFFE8710A),
+            MaterialTheme.extendedColors.warning,
             "Permission Needed",
-            Color(0xFFE8710A).copy(alpha = 0.15f),
+            MaterialTheme.extendedColors.warning.copy(alpha = 0.15f),
             Icons.Default.Key
         )
         ShizukuState.UNAVAILABLE -> Quadruple(
-            Color(0xFFD93025),
+            MaterialTheme.colorScheme.error,
             "Service Offline",
-            Color(0xFFD93025).copy(alpha = 0.12f),
+            MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
             Icons.Default.Warning
         )
     }
@@ -716,7 +713,7 @@ fun ShizukuStatusChip(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.size(10.dp)
                     )
                 }

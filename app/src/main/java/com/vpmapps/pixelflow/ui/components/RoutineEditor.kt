@@ -1,5 +1,13 @@
 package com.vpmapps.pixelflow.ui.components
 
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.filled.WbTwilight
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material.icons.filled.BluetoothDisabled
+import androidx.compose.material.icons.filled.WifiOff
+import com.vpmapps.pixelflow.ui.theme.extendedColors
 import android.Manifest
 import android.app.TimePickerDialog
 import android.content.Context
@@ -161,7 +169,7 @@ import org.json.JSONObject
  *    with AlarmManager precision integration.
  * 3. Defining corresponding shell commands as actions (AOD, Auto-Rotate, Dark Mode, custom commands)
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RoutineEditor(
     initialRoutine: Routine? = null,
@@ -325,7 +333,7 @@ fun RoutineEditor(
     }
 
     // Initialize trigger values from initialRoutine if present
-    remember(initialRoutine) {
+    LoadOncePerKey(initialRoutine) {
         initialRoutine?.triggers?.forEach { trigger ->
             try {
                 val json = JSONObject(trigger.configJson)
@@ -432,7 +440,7 @@ fun RoutineEditor(
     var testExecutionStatus by remember { mutableStateOf<String?>(null) }
 
     // Populate actions from existing routine
-    remember(initialRoutine) {
+    LoadOncePerKey(initialRoutine) {
         val existingActions = initialRoutine?.actions?.ifEmpty { initialRoutine.parseActions() } ?: emptyList()
         for (action in existingActions) {
             when (action.type) {
@@ -704,7 +712,7 @@ fun RoutineEditor(
         // ==========================================
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.elevatedCardElevation(
                 defaultElevation = 3.dp,
                 pressedElevation = 6.dp
@@ -729,8 +737,7 @@ fun RoutineEditor(
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "1",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleSmallEmphasized,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -738,7 +745,6 @@ fun RoutineEditor(
                     Text(
                         text = "Routine Identity",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -750,16 +756,16 @@ fun RoutineEditor(
                     placeholder = { Text("e.g. Bedtime Power Saver, Work Focus, Morning Wakeup") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF2563EB),
-                        focusedLabelColor = Color(0xFF2563EB),
-                        focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("routine_name_input"),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large
                 )
 
                 OutlinedTextField(
@@ -770,16 +776,16 @@ fun RoutineEditor(
                     singleLine = false,
                     maxLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF2563EB),
-                        focusedLabelColor = Color(0xFF2563EB),
-                        focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("routine_description_input"),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large
                 )
 
                 // Color accent picker
@@ -831,7 +837,7 @@ fun RoutineEditor(
         // ==========================================
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.elevatedCardElevation(
                 defaultElevation = 3.dp,
                 pressedElevation = 6.dp
@@ -856,8 +862,7 @@ fun RoutineEditor(
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "2",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleSmallEmphasized,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -865,7 +870,6 @@ fun RoutineEditor(
                     Text(
                         text = "If",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -886,19 +890,18 @@ fun RoutineEditor(
                         if (index > 0) {
                             Text(
                                 text = if (matchMode == Routine.MATCH_ANY) "or" else "and",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(start = 16.dp)
                             )
                         }
                         val isFocused = selectedTriggerType == type
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isFocused) Color(0xFF2563EB).copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (isFocused) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                             border = androidx.compose.foundation.BorderStroke(
                                 if (isFocused) 1.5.dp else 1.dp,
-                                if (isFocused) Color(0xFF2563EB) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                                if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -915,7 +918,7 @@ fun RoutineEditor(
                                 Icon(
                                     imageVector = triggerTypeIcon(type),
                                     contentDescription = null,
-                                    tint = if (isFocused) Color(0xFF2563EB) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -923,7 +926,6 @@ fun RoutineEditor(
                                     Text(
                                         text = type.displayName,
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = RoutineTrigger(type = type, configJson = buildTriggerConfig(type)).summary(),
@@ -950,20 +952,14 @@ fun RoutineEditor(
 
                 // All / Any
                 if (conditionTypes.size > 1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(Routine.MATCH_ALL to "All conditions", Routine.MATCH_ANY to "Any condition").forEach { (mode, label) ->
-                            FilterChip(
-                                selected = matchMode == mode,
-                                onClick = {
-                                    haptics.selectionTick()
-                                    matchMode = mode
-                                },
-                                label = { Text(label) },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.testTag("match_mode_$mode")
-                            )
-                        }
-                    }
+                    ConnectedChoiceGroup(
+                        options = listOf(
+                            ChoiceOption(Routine.MATCH_ALL, "All conditions", testTag = "match_mode_${Routine.MATCH_ALL}"),
+                            ChoiceOption(Routine.MATCH_ANY, "Any condition", testTag = "match_mode_${Routine.MATCH_ANY}")
+                        ),
+                        selected = matchMode,
+                        onSelect = { matchMode = it }
+                    )
                 }
 
                 // Add another condition. Time, sunrise and sunset share one alarm, so only one of them.
@@ -996,7 +992,7 @@ fun RoutineEditor(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                 ),
-                                shape = RoundedCornerShape(14.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.testTag("trigger_type_chip_${type.name}")
                             )
                         }
@@ -1008,7 +1004,6 @@ fun RoutineEditor(
                 Text(
                     text = "${selectedTriggerType.displayName} settings",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
@@ -1021,68 +1016,25 @@ fun RoutineEditor(
                         Text(
                             text = "Scheduled Trigger Mode",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        // Mode Selector Chips
-                        val scheduleModes = listOf(
-                            "DAILY" to "Daily",
-                            "WEEKLY" to "Weekly Days",
-                            "SPECIFIC_TIME" to "Specific Time",
-                            "INTERVAL" to "Interval Repeat"
+                        ConnectedChoiceGroup(
+                            options = listOf(
+                                ChoiceOption("DAILY", "Daily", testTag = "schedule_mode_DAILY"),
+                                ChoiceOption("WEEKLY", "Weekly", testTag = "schedule_mode_WEEKLY"),
+                                ChoiceOption("SPECIFIC_TIME", "At time", testTag = "schedule_mode_SPECIFIC_TIME"),
+                                ChoiceOption("INTERVAL", "Repeat", testTag = "schedule_mode_INTERVAL")
+                            ),
+                            selected = scheduleMode,
+                            onSelect = { scheduleMode = it }
                         )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            scheduleModes.forEach { (modeKey, modeTitle) ->
-                                val isModeSelected = scheduleMode == modeKey
-                                FilterChip(
-                                    selected = isModeSelected,
-                                    onClick = {
-                                        haptics.selectionTick()
-                                        scheduleMode = modeKey
-                                    },
-                                    label = { Text(modeTitle, fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.Medium) },
-                                    leadingIcon = {
-                                        val icon = when (modeKey) {
-                                            "DAILY" -> Icons.Default.Schedule
-                                            "WEEKLY" -> Icons.Default.CalendarMonth
-                                            "SPECIFIC_TIME" -> Icons.Default.Alarm
-                                            "INTERVAL" -> Icons.Default.Repeat
-                                            else -> Icons.Default.Schedule
-                                        }
-                                        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                        selectedLabelColor = Color(0xFF1D4ED8),
-                                        selectedLeadingIconColor = Color(0xFF2563EB),
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        enabled = true,
-                                        selected = isModeSelected,
-                                        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                        selectedBorderColor = Color(0xFF2563EB),
-                                        borderWidth = 1.dp,
-                                        selectedBorderWidth = 1.5.dp
-                                    ),
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.testTag("schedule_mode_$modeKey")
-                                )
-                            }
-                        }
 
                         // Time Input & Presets for non-interval modes
                         if (scheduleMode != "INTERVAL") {
                             Text(
                                 text = "Trigger Time (Exact)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                             )
 
                             val parsedTime = TimeParser.parseToHourMinute(startTime)
@@ -1099,9 +1051,9 @@ fun RoutineEditor(
                                     placeholder = { Text("21:00 or 9:00 PM") },
                                     singleLine = true,
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Color(0xFF2563EB),
-                                        focusedLabelColor = Color(0xFF2563EB),
-                                        focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                        focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                     ),
@@ -1130,7 +1082,7 @@ fun RoutineEditor(
                                     modifier = Modifier
                                         .weight(1f)
                                         .testTag("time_start_input"),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = MaterialTheme.shapes.medium
                                 )
 
                                 FilledTonalButton(
@@ -1146,7 +1098,7 @@ fun RoutineEditor(
                                             false
                                         ).show()
                                     },
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.testTag("pick_time_clock_btn")
                                 ) {
                                     Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1158,7 +1110,7 @@ fun RoutineEditor(
                             // Dynamic Confirmation Badge
                             if (parsedTime != null) {
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -1182,11 +1134,20 @@ fun RoutineEditor(
                                     }
                                 }
                             } else {
-                                Text(
-                                    text = "⚠ Please enter a valid time (e.g. \"9:00 PM\", \"21:00\", or \"9pm\") or tap Pick.",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Please enter a valid time (e.g. \"9:00 PM\", \"21:00\", or \"9pm\") or tap Pick.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
 
                             // Quick Time Presets
@@ -1201,17 +1162,17 @@ fun RoutineEditor(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 listOf(
-                                    "07:00" to "🌅 7:00 AM",
-                                    "08:30" to "💼 8:30 AM",
-                                    "12:00" to "☀️ 12:00 PM",
-                                    "18:00" to "🌆 6:00 PM",
-                                    "21:00" to "🌙 9:00 PM",
-                                    "22:30" to "🛏️ 10:30 PM"
-                                ).forEach { (timeVal, timeLabel) ->
+                                    Triple("07:00", "7:00 AM", Icons.Default.WbTwilight),
+                                    Triple("08:30", "8:30 AM", Icons.Default.Work),
+                                    Triple("12:00", "12:00 PM", Icons.Default.LightMode),
+                                    Triple("18:00", "6:00 PM", Icons.Default.WbTwilight),
+                                    Triple("21:00", "9:00 PM", Icons.Default.Nightlight),
+                                    Triple("22:30", "10:30 PM", Icons.Default.Bedtime)
+                                ).forEach { (timeVal, timeLabel, timeIcon) ->
                                     val isSelected = parsedTime != null &&
                                             TimeParser.format24Hour(parsedTime.first, parsedTime.second) == timeVal
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = MaterialTheme.shapes.small,
                                         color = if (isSelected)
                                             MaterialTheme.colorScheme.primaryContainer
                                         else
@@ -1223,13 +1184,19 @@ fun RoutineEditor(
                                             }
                                             .padding(2.dp)
                                     ) {
-                                        Text(
-                                            text = timeLabel,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        val presetColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                                        )
+                                        ) {
+                                            Icon(timeIcon, contentDescription = null, tint = presetColor, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = timeLabel,
+                                                style = if (isSelected) MaterialTheme.typography.labelMediumEmphasized else MaterialTheme.typography.labelMedium,
+                                                color = presetColor
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1237,7 +1204,7 @@ fun RoutineEditor(
                             // End Time / Duration Options
                             Spacer(modifier = Modifier.height(10.dp))
                             ElevatedCard(
-                                shape = RoundedCornerShape(24.dp),
+                                shape = MaterialTheme.shapes.extraLarge,
                                 elevation = CardDefaults.elevatedCardElevation(
                                     defaultElevation = if (hasEndTime) 2.dp else 0.dp,
                                     pressedElevation = 4.dp
@@ -1271,7 +1238,6 @@ fun RoutineEditor(
                                                 Text(
                                                     text = "Set End Time / Duration",
                                                     style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.SemiBold
                                                 )
                                                 Text(
                                                     text = "Routine runs for a set duration, then restores settings",
@@ -1355,9 +1321,9 @@ fun RoutineEditor(
                                                 placeholder = { Text("01:00") },
                                                 singleLine = true,
                                                 colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedBorderColor = Color(0xFF2563EB),
-                                                    focusedLabelColor = Color(0xFF2563EB),
-                                                    focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                                    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                                 ),
@@ -1386,7 +1352,7 @@ fun RoutineEditor(
                                                 modifier = Modifier
                                                     .weight(1f)
                                                     .testTag("time_end_input"),
-                                                shape = RoundedCornerShape(10.dp)
+                                                shape = MaterialTheme.shapes.small
                                             )
 
                                             FilledTonalButton(
@@ -1402,7 +1368,7 @@ fun RoutineEditor(
                                                         false
                                                     ).show()
                                                 },
-                                                shape = RoundedCornerShape(10.dp),
+                                                shape = MaterialTheme.shapes.small,
                                                 modifier = Modifier.testTag("pick_end_time_clock_btn")
                                             ) {
                                                 Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1428,7 +1394,7 @@ fun RoutineEditor(
 
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Surface(
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = MaterialTheme.shapes.small,
                                                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
@@ -1461,8 +1427,7 @@ fun RoutineEditor(
                         if (scheduleMode == "WEEKLY" || scheduleMode == "DAILY") {
                             Text(
                                 text = "Active Days of Week",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                             )
 
                             val daysOfWeek = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -1523,7 +1488,7 @@ fun RoutineEditor(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.clickable {
                                         haptics.buttonClick()
@@ -1533,7 +1498,7 @@ fun RoutineEditor(
                                     Text("Every Day", fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.clickable {
                                         haptics.buttonClick()
@@ -1543,7 +1508,7 @@ fun RoutineEditor(
                                     Text("Weekdays (Mon-Fri)", fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                                 }
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.clickable {
                                         haptics.buttonClick()
@@ -1559,8 +1524,7 @@ fun RoutineEditor(
                         if (scheduleMode == "INTERVAL") {
                             Text(
                                 text = "Repeating Interval (Every ${if (intervalMinutes >= 60) "${intervalMinutes / 60} hour(s)" else "$intervalMinutes minutes"})",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                             )
 
                             FlowRow(
@@ -1584,7 +1548,7 @@ fun RoutineEditor(
                         // AlarmManager Precision Status & Next Trigger Badge (Status-Critical Alert Card with glowing border)
                         // ----------------------------------------------------
                         ElevatedCard(
-                            shape = RoundedCornerShape(24.dp),
+                            shape = MaterialTheme.shapes.extraLarge,
                             elevation = CardDefaults.elevatedCardElevation(
                                 defaultElevation = 0.dp,
                                 pressedElevation = 2.dp
@@ -1599,25 +1563,25 @@ fun RoutineEditor(
                                         width = 1.5.dp,
                                         brush = Brush.horizontalGradient(
                                             colors = listOf(
-                                                Color(0xFF2563EB),
-                                                Color(0xFF60A5FA),
-                                                Color(0xFF38BDF8),
-                                                Color(0xFF818CF8),
-                                                Color(0xFF2563EB)
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.secondary,
+                                                MaterialTheme.colorScheme.tertiary,
+                                                MaterialTheme.colorScheme.primary
                                             )
                                         )
                                     ),
-                                    shape = RoundedCornerShape(24.dp)
+                                    shape = MaterialTheme.shapes.extraLarge
                                 )
                                 .background(
                                     brush = Brush.verticalGradient(
                                         colors = listOf(
-                                            Color(0xFF2563EB).copy(alpha = 0.12f),
-                                            Color(0xFF3B82F6).copy(alpha = 0.04f),
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.04f),
                                             Color.Transparent
                                         )
                                     ),
-                                    shape = RoundedCornerShape(24.dp)
+                                    shape = MaterialTheme.shapes.extraLarge
                                 )
                         ) {
                             Column(
@@ -1633,14 +1597,14 @@ fun RoutineEditor(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Surface(
                                             shape = CircleShape,
-                                            color = Color(0xFF2563EB),
+                                            color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(38.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
                                                 Icon(
                                                     imageVector = Icons.Default.Alarm,
                                                     contentDescription = null,
-                                                    tint = Color.White,
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                             }
@@ -1649,8 +1613,7 @@ fun RoutineEditor(
                                         Column {
                                             Text(
                                                 text = "AlarmManager RTC_WAKEUP",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleMediumEmphasized,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
@@ -1664,8 +1627,8 @@ fun RoutineEditor(
                                     // Glowing Pill Alert Badge
                                     Surface(
                                         shape = RoundedCornerShape(50),
-                                        color = Color(0xFF2563EB).copy(alpha = 0.15f),
-                                        border = BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.5f))
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -1675,14 +1638,13 @@ fun RoutineEditor(
                                                 modifier = Modifier
                                                     .size(6.dp)
                                                     .clip(CircleShape)
-                                                    .background(Color(0xFF2563EB))
+                                                    .background(MaterialTheme.colorScheme.primary)
                                             )
                                             Spacer(modifier = Modifier.width(5.dp))
                                             Text(
-                                                text = "EXACT WAKEUP",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF2563EB)
+                                                text = "Exact wakeup",
+                                                style = MaterialTheme.typography.labelSmallEmphasized,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
@@ -1697,9 +1659,9 @@ fun RoutineEditor(
                                 if (nextScheduledTriggerMillis != null) {
                                     val formattedNext = RoutineAlarmManager.formatNextTriggerHumanReadable(nextScheduledTriggerMillis)
                                     Surface(
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = MaterialTheme.shapes.medium,
                                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                                        border = BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.25f)),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
@@ -1709,21 +1671,19 @@ fun RoutineEditor(
                                             Icon(
                                                 imageVector = Icons.Default.Schedule,
                                                 contentDescription = null,
-                                                tint = Color(0xFF2563EB),
+                                                tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Column {
                                                 Text(
                                                     text = "Next Scheduled Alarm Execution",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = Color(0xFF1D4ED8)
+                                                    style = MaterialTheme.typography.labelSmallEmphasized,
+                                                    color = MaterialTheme.colorScheme.primary
                                                 )
                                                 Text(
                                                     text = formattedNext,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.bodyMediumEmphasized,
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
@@ -1737,10 +1697,10 @@ fun RoutineEditor(
                                         alarmTestStatus = "Armed! Test exact alarm will fire in 5s..."
                                         RoutineAlarmManager.scheduleTestAlarm(context, initialRoutine?.id ?: 9999L, delaySeconds = 5)
                                     },
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = MaterialTheme.shapes.large,
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF2563EB),
-                                        contentColor = Color.White
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
                                     ),
                                     elevation = ButtonDefaults.buttonElevation(
                                         defaultElevation = 2.dp,
@@ -1761,9 +1721,9 @@ fun RoutineEditor(
 
                                 alarmTestStatus?.let { status ->
                                     Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = Color(0xFF00897B).copy(alpha = 0.15f),
-                                        border = BorderStroke(1.dp, Color(0xFF00897B).copy(alpha = 0.4f)),
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Row(
@@ -1773,7 +1733,7 @@ fun RoutineEditor(
                                             Icon(
                                                 imageVector = Icons.Default.CheckCircle,
                                                 contentDescription = null,
-                                                tint = Color(0xFF00897B),
+                                                tint = MaterialTheme.colorScheme.tertiary,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
@@ -1781,7 +1741,7 @@ fun RoutineEditor(
                                                 text = status,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.Medium,
-                                                color = Color(0xFF00897B)
+                                                color = MaterialTheme.colorScheme.tertiary
                                             )
                                         }
                                     }
@@ -1793,12 +1753,12 @@ fun RoutineEditor(
                     TriggerType.SUNRISE, TriggerType.SUNSET -> {
                         val isSunrise = selectedTriggerType == TriggerType.SUNRISE
                         val eventName = if (isSunrise) "Sunrise" else "Sunset"
-                        val eventColor = if (isSunrise) Color(0xFFF57C00) else Color(0xFF5E35B1)
+                        val eventColor = if (isSunrise) MaterialTheme.extendedColors.warning else MaterialTheme.colorScheme.tertiary
                         val eventIcon = if (isSunrise) Icons.Default.LightMode else Icons.Default.Nightlight
 
                         // Header Banner
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             color = eventColor.copy(alpha = 0.12f),
                             border = BorderStroke(1.dp, eventColor.copy(alpha = 0.35f)),
                             modifier = Modifier.fillMaxWidth()
@@ -1826,7 +1786,6 @@ fun RoutineEditor(
                                     Text(
                                         text = "$eventName Routine Trigger",
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
@@ -1840,7 +1799,7 @@ fun RoutineEditor(
 
                         // 1. Real Location Card
                         Card(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                             ),
@@ -1866,7 +1825,6 @@ fun RoutineEditor(
                                         Text(
                                             text = "User Location",
                                             style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
 
@@ -1900,7 +1858,7 @@ fun RoutineEditor(
 
                                 val displayLabel = userLocation.label ?: LocationHelper.formatCoordinates(userLocation.latitude, userLocation.longitude)
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.surface,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -1912,8 +1870,7 @@ fun RoutineEditor(
                                         Column {
                                             Text(
                                                 text = displayLabel,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold
+                                                style = MaterialTheme.typography.bodyMediumEmphasized,
                                             )
                                             Text(
                                                 text = "Coordinates: ${LocationHelper.formatCoordinates(userLocation.latitude, userLocation.longitude)}",
@@ -1923,7 +1880,7 @@ fun RoutineEditor(
                                         }
 
                                         Surface(
-                                            shape = RoundedCornerShape(6.dp),
+                                            shape = MaterialTheme.shapes.extraSmall,
                                             color = if (hasLocationPermission) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
                                         ) {
                                             Text(
@@ -1947,7 +1904,7 @@ fun RoutineEditor(
                                             )
                                         },
                                         modifier = Modifier.fillMaxWidth().testTag("grant_location_permission_btn"),
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text("Grant Location Access for Exact Solar Times")
                                     }
@@ -1962,8 +1919,7 @@ fun RoutineEditor(
 
                         Text(
                             text = "Today's Solar Schedule at Your Location",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                         )
 
                         Row(
@@ -1972,16 +1928,16 @@ fun RoutineEditor(
                         ) {
                             // Sunrise card
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSunrise) Color(0xFFFFF3E0) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, if (isSunrise) Color(0xFFF57C00) else Color.Transparent),
+                                shape = MaterialTheme.shapes.small,
+                                color = if (isSunrise) MaterialTheme.extendedColors.warningContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, if (isSunrise) MaterialTheme.extendedColors.warning else Color.Transparent),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.LightMode, contentDescription = null, tint = Color(0xFFF57C00), modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.LightMode, contentDescription = null, tint = MaterialTheme.extendedColors.warning, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Sunrise", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                        Text("Sunrise", style = MaterialTheme.typography.labelMediumEmphasized)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     val sunriseTimeStr = todaySolar.sunriseMillis?.let {
@@ -1990,25 +1946,24 @@ fun RoutineEditor(
                                     } ?: "N/A"
                                     Text(
                                         text = sunriseTimeStr,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (isSunrise) Color(0xFFE65100) else MaterialTheme.colorScheme.onSurface
+                                        style = MaterialTheme.typography.titleMediumEmphasized,
+                                        color = if (isSunrise) MaterialTheme.extendedColors.warning else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
 
                             // Sunset card
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (!isSunrise) Color(0xFFEDE7F6) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, if (!isSunrise) Color(0xFF5E35B1) else Color.Transparent),
+                                shape = MaterialTheme.shapes.small,
+                                color = if (!isSunrise) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, if (!isSunrise) MaterialTheme.colorScheme.tertiary else Color.Transparent),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Nightlight, contentDescription = null, tint = Color(0xFF5E35B1), modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Nightlight, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Sunset", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                        Text("Sunset", style = MaterialTheme.typography.labelMediumEmphasized)
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     val sunsetTimeStr = todaySolar.sunsetMillis?.let {
@@ -2017,9 +1972,8 @@ fun RoutineEditor(
                                     } ?: "N/A"
                                     Text(
                                         text = sunsetTimeStr,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (!isSunrise) Color(0xFF512DA8) else MaterialTheme.colorScheme.onSurface
+                                        style = MaterialTheme.typography.titleMediumEmphasized,
+                                        color = if (!isSunrise) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
@@ -2028,8 +1982,7 @@ fun RoutineEditor(
                         // 3. Offset selector ("When to trigger")
                         Text(
                             text = "Trigger Timing Offset",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                         )
 
                         val offsetOptions = listOf(
@@ -2061,8 +2014,7 @@ fun RoutineEditor(
                         // 4. Days of the week selection
                         Text(
                             text = "Repeat Days",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                         )
 
                         val dayOptions = listOf("Daily", "Weekdays", "Weekends")
@@ -2089,7 +2041,7 @@ fun RoutineEditor(
 
                         if (solarNextMillis != null) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = MaterialTheme.shapes.small,
                                 color = eventColor.copy(alpha = 0.14f),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -2106,8 +2058,7 @@ fun RoutineEditor(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "Next trigger: ${RoutineAlarmManager.formatNextTriggerHumanReadable(solarNextMillis)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
+                                        style = MaterialTheme.typography.labelSmallEmphasized,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
@@ -2116,11 +2067,11 @@ fun RoutineEditor(
                     }
 
                     TriggerType.LOCATION -> {
-                        val geoThemeColor = Color(0xFF00897B) // Precision Emerald / Teal for Geolocation
+                        val geoThemeColor = MaterialTheme.colorScheme.tertiary // Precision Emerald / Teal for Geolocation
 
                         // Header Banner
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             color = geoThemeColor.copy(alpha = 0.12f),
                             border = BorderStroke(1.dp, geoThemeColor.copy(alpha = 0.35f)),
                             modifier = Modifier.fillMaxWidth()
@@ -2148,7 +2099,6 @@ fun RoutineEditor(
                                     Text(
                                         text = "Precision Geolocation Trigger",
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
@@ -2163,7 +2113,7 @@ fun RoutineEditor(
                         // 1. Permission status card if not granted
                         if (!hasLocationPermission) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = MaterialTheme.shapes.small,
                                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -2178,8 +2128,7 @@ fun RoutineEditor(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "Location Permission Required",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.labelLargeEmphasized,
                                             color = MaterialTheme.colorScheme.onErrorContainer
                                         )
                                     }
@@ -2212,8 +2161,7 @@ fun RoutineEditor(
                         // 2. Location Label & Presets
                         Text(
                             text = "Target Area Name / Label",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                         )
                         OutlinedTextField(
                             value = geoLabel,
@@ -2232,7 +2180,7 @@ fun RoutineEditor(
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                             ),
                             modifier = Modifier.fillMaxWidth().testTag("geo_label_input"),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.medium
                         )
 
                         // Quick place presets
@@ -2248,7 +2196,7 @@ fun RoutineEditor(
                                     onClick = { geoLabel = preset },
                                     label = { Text(preset, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
                                     accentColor = geoThemeColor,
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.testTag("preset_$preset")
                                 )
                             }
@@ -2256,7 +2204,7 @@ fun RoutineEditor(
 
                         // 3. Current Location & Coordinate Tools
                         Surface(
-                            shape = RoundedCornerShape(10.dp),
+                            shape = MaterialTheme.shapes.small,
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -2276,8 +2224,7 @@ fun RoutineEditor(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = "Device GPS Location",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold
+                                            style = MaterialTheme.typography.labelMediumEmphasized,
                                         )
                                     }
 
@@ -2330,7 +2277,7 @@ fun RoutineEditor(
                                             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                         ),
                                         modifier = Modifier.weight(1f).testTag("geo_lat_input"),
-                                        shape = RoundedCornerShape(12.dp)
+                                        shape = MaterialTheme.shapes.medium
                                     )
                                     OutlinedTextField(
                                         value = geoLongitude,
@@ -2346,7 +2293,7 @@ fun RoutineEditor(
                                             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                         ),
                                         modifier = Modifier.weight(1f).testTag("geo_lng_input"),
-                                        shape = RoundedCornerShape(12.dp)
+                                        shape = MaterialTheme.shapes.medium
                                     )
                                 }
                             }
@@ -2355,8 +2302,7 @@ fun RoutineEditor(
                         // 4. Geofence Transition Type (Enter vs Exit)
                         Text(
                             text = "Trigger Event (Condition)",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                         )
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2400,17 +2346,15 @@ fun RoutineEditor(
                         ) {
                             Text(
                                 text = "Geofence Radius (Precision)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                             )
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = geoThemeColor.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     text = "${geoRadiusMeters} meters",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelSmallEmphasized,
                                     color = geoThemeColor,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
@@ -2437,7 +2381,7 @@ fun RoutineEditor(
                                     onClick = { geoRadiusMeters = radiusVal },
                                     label = { Text(labelText, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
                                     accentColor = geoThemeColor,
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.testTag("geo_radius_${radiusVal}")
                                 )
                             }
@@ -2456,11 +2400,11 @@ fun RoutineEditor(
                             val isCurrentlyInside = currentDist <= geoRadiusMeters
 
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isCurrentlyInside) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.small,
+                                color = if (isCurrentlyInside) MaterialTheme.extendedColors.successContainer else MaterialTheme.colorScheme.surfaceVariant,
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isCurrentlyInside) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outlineVariant
+                                    if (isCurrentlyInside) MaterialTheme.extendedColors.success else MaterialTheme.colorScheme.outlineVariant
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -2471,16 +2415,15 @@ fun RoutineEditor(
                                     Icon(
                                         imageVector = if (isCurrentlyInside) Icons.Default.CheckCircle else Icons.Default.Place,
                                         contentDescription = null,
-                                        tint = if (isCurrentlyInside) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                                        tint = if (isCurrentlyInside) MaterialTheme.extendedColors.success else MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
                                         Text(
                                             text = if (isCurrentlyInside) "Currently INSIDE Geofence zone" else "Currently OUTSIDE Geofence zone",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isCurrentlyInside) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
+                                            style = MaterialTheme.typography.labelSmallEmphasized,
+                                            color = if (isCurrentlyInside) MaterialTheme.extendedColors.success else MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
                                             text = "Distance: ~${currentDist.toInt()}m from center point (Radius: ${geoRadiusMeters}m)",
@@ -2517,8 +2460,7 @@ fun RoutineEditor(
                     TriggerType.WIFI -> {
                         Text(
                             text = "Wi-Fi Trigger Settings",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelLargeEmphasized,
                         )
                         OutlinedTextField(
                             value = wifiSsid,
@@ -2527,26 +2469,23 @@ fun RoutineEditor(
                             placeholder = { Text("e.g. Home_Network_5G") },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF2563EB),
-                                focusedLabelColor = Color(0xFF2563EB),
-                                focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                             ),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.medium
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (wifiConnected) "Trigger when connected" else "Trigger when disconnected")
-                            ExpressiveSwitch(
-                                checked = wifiConnected,
-                                onCheckedChange = { wifiConnected = it }
-                            )
-                        }
+                        ConnectedChoiceGroup(
+                            options = listOf(
+                                ChoiceOption(true, "Connected", Icons.Default.Wifi),
+                                ChoiceOption(false, "Disconnected", Icons.Default.WifiOff)
+                            ),
+                            selected = wifiConnected,
+                            onSelect = { wifiConnected = it }
+                        )
                     }
 
                     TriggerType.BLUETOOTH -> {
@@ -2557,8 +2496,7 @@ fun RoutineEditor(
                         ) {
                             Text(
                                 text = "Saved Bluetooth Devices",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelLargeEmphasized,
                             )
                             IconButton(
                                 onClick = {
@@ -2585,7 +2523,7 @@ fun RoutineEditor(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                                 ),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
@@ -2602,7 +2540,6 @@ fun RoutineEditor(
                                         Text(
                                             text = "Permission Required for Saved Devices",
                                             style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                     Text(
@@ -2624,7 +2561,7 @@ fun RoutineEditor(
                         val isAnySelected = btDevice == "Any Paired Device" || btDevice.isBlank() || btDevice.equals("Any Device", ignoreCase = true)
                         Surface(
                             onClick = { btDevice = "Any Paired Device" },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = MaterialTheme.shapes.small,
                             color = if (isAnySelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                             border = BorderStroke(1.dp, if (isAnySelected) MaterialTheme.colorScheme.primary else Color.Transparent),
                             modifier = Modifier.fillMaxWidth().testTag("bt_device_any")
@@ -2639,7 +2576,7 @@ fun RoutineEditor(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Column {
-                                    Text("Any Paired Device", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                    Text("Any Paired Device", style = MaterialTheme.typography.bodyMediumEmphasized)
                                     Text(
                                         "Triggers when any paired device connects or disconnects",
                                         style = MaterialTheme.typography.bodySmall,
@@ -2661,7 +2598,7 @@ fun RoutineEditor(
                                 val isSelected = btDevice.equals(dev.name, ignoreCase = true) || btDevice.equals(dev.address, ignoreCase = true)
                                 Surface(
                                     onClick = { btDevice = dev.name },
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                     border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent),
                                     modifier = Modifier.fillMaxWidth().testTag("bt_saved_device_${dev.address}")
@@ -2685,8 +2622,7 @@ fun RoutineEditor(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = dev.name,
-                                                fontWeight = FontWeight.SemiBold,
-                                                style = MaterialTheme.typography.bodyMedium
+                                                style = MaterialTheme.typography.bodyMediumEmphasized
                                             )
                                             Text(
                                                 text = "MAC: ${dev.address}",
@@ -2699,7 +2635,7 @@ fun RoutineEditor(
                             }
                         } else if (hasBtPermission) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = MaterialTheme.shapes.small,
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -2746,49 +2682,33 @@ fun RoutineEditor(
                                 placeholder = { Text("e.g. Car Audio, Pixel Buds Pro") },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF2563EB),
-                                    focusedLabelColor = Color(0xFF2563EB),
-                                    focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                 ),
                                 modifier = Modifier.fillMaxWidth().testTag("bt_custom_name_input"),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = MaterialTheme.shapes.medium
                             )
                         }
 
                         // Trigger Condition (Connect vs Disconnect)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (btConnected) "Trigger when connected" else "Trigger when disconnected",
-                                    fontWeight = FontWeight.Medium,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = if (btConnected) "Runs routine when this device connects" else "Runs routine when disconnected",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            ExpressiveSwitch(
-                                checked = btConnected,
-                                onCheckedChange = { btConnected = it },
-                                modifier = Modifier.testTag("bt_trigger_connection_switch")
-                            )
-                        }
+                        ConnectedChoiceGroup(
+                            options = listOf(
+                                ChoiceOption(true, "Connected", Icons.Default.Bluetooth, "bt_trigger_connected"),
+                                ChoiceOption(false, "Disconnected", Icons.Default.BluetoothDisabled, "bt_trigger_disconnected")
+                            ),
+                            selected = btConnected,
+                            onSelect = { btConnected = it },
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
                     }
 
                     TriggerType.BATTERY -> {
                         Text(
                             text = "Battery Threshold: ${batteryLevel.toInt()}%",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold
+                            style = MaterialTheme.typography.labelLargeEmphasized,
                         )
                         Slider(
                             value = batteryLevel,
@@ -2820,8 +2740,7 @@ fun RoutineEditor(
                             Column {
                                 Text(
                                     text = "Target Application",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold
+                                    style = MaterialTheme.typography.labelLargeEmphasized,
                                 )
                                 Text(
                                     text = if (installedApps.isNotEmpty()) {
@@ -2843,11 +2762,7 @@ fun RoutineEditor(
                                     .testTag("refresh_installed_apps_btn")
                             ) {
                                 if (isLoadingApps) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    LoadingIndicator(modifier = Modifier.size(24.dp))
                                 } else {
                                     Icon(
                                         Icons.Default.Refresh,
@@ -2868,7 +2783,7 @@ fun RoutineEditor(
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = MaterialTheme.shapes.medium,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                             border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                             modifier = Modifier
@@ -2889,14 +2804,13 @@ fun RoutineEditor(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = "Selected Target App",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            style = MaterialTheme.typography.labelSmallEmphasized,
                                             color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
                                         )
                                         if (selectedAppInfo?.isSystemApp == true) {
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
-                                                shape = RoundedCornerShape(4.dp),
+                                                shape = MaterialTheme.shapes.extraSmall,
                                                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
                                             ) {
                                                 Text(
@@ -2911,7 +2825,6 @@ fun RoutineEditor(
                                     Text(
                                         text = appName.ifBlank { "YouTube" },
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -2968,16 +2881,16 @@ fun RoutineEditor(
                             },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF2563EB),
-                                focusedLabelColor = Color(0xFF2563EB),
-                                focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("app_search_text_field"),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = MaterialTheme.shapes.medium
                         )
 
                         // Category Filter Chips
@@ -3016,7 +2929,7 @@ fun RoutineEditor(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                                 ),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -3024,11 +2937,7 @@ fun RoutineEditor(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    LoadingIndicator(modifier = Modifier.size(32.dp))
                                     Text(
                                         text = "Scanning installed applications...",
                                         style = MaterialTheme.typography.bodyMedium,
@@ -3075,7 +2984,7 @@ fun RoutineEditor(
                                         appName = app.appName
                                         appPackage = app.packageName
                                     },
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = MaterialTheme.shapes.medium,
                                     color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                     border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent),
                                     modifier = Modifier
@@ -3105,15 +3014,14 @@ fun RoutineEditor(
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(
                                                     text = app.appName,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    style = MaterialTheme.typography.bodyMediumEmphasized,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 if (app.isSystemApp) {
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Surface(
-                                                        shape = RoundedCornerShape(4.dp),
+                                                        shape = MaterialTheme.shapes.extraSmall,
                                                         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
                                                     ) {
                                                         Text(
@@ -3161,7 +3069,7 @@ fun RoutineEditor(
                             }
                         } else if (!isLoadingApps) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -3222,16 +3130,16 @@ fun RoutineEditor(
                                 placeholder = { Text("e.g. YouTube, Maps, Kindle, com.vpmapps.pixelflow.app") },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF2563EB),
-                                    focusedLabelColor = Color(0xFF2563EB),
-                                    focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("custom_app_name_input"),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = MaterialTheme.shapes.medium
                             )
                         }
                     }
@@ -3244,7 +3152,7 @@ fun RoutineEditor(
         // ==========================================
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.elevatedCardElevation(
                 defaultElevation = 3.dp,
                 pressedElevation = 6.dp
@@ -3269,8 +3177,7 @@ fun RoutineEditor(
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "3",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.titleSmallEmphasized,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -3278,7 +3185,6 @@ fun RoutineEditor(
                     Text(
                         text = "Actions",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -3421,122 +3327,24 @@ fun RoutineEditor(
                     ) {
                         Text(
                             text = "Ringer & Sound Mode",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         // Mode Selection: Ring, Vibrate, Silent
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // 1. Ring / Normal
-                            val isRingSelected = soundProfile == "NORMAL" || soundProfile == "RING"
-                            FilterChip(
-                                selected = isRingSelected,
-                                onClick = { soundProfile = "NORMAL" },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.NotificationsActive,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                label = { Text("Ring", fontWeight = if (isRingSelected) FontWeight.Bold else FontWeight.Medium) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                    selectedLabelColor = Color(0xFF1D4ED8),
-                                    selectedLeadingIconColor = Color(0xFF2563EB),
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = isRingSelected,
-                                    borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                    selectedBorderColor = Color(0xFF2563EB),
-                                    borderWidth = 1.dp,
-                                    selectedBorderWidth = 1.5.dp
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("sound_mode_ring_chip")
-                            )
-
-                            // 2. Vibrate
-                            val isVibrateSelected = soundProfile == "VIBRATE"
-                            FilterChip(
-                                selected = isVibrateSelected,
-                                onClick = { soundProfile = "VIBRATE" },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Vibration,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                label = { Text("Vibrate", fontWeight = if (isVibrateSelected) FontWeight.Bold else FontWeight.Medium) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                    selectedLabelColor = Color(0xFF1D4ED8),
-                                    selectedLeadingIconColor = Color(0xFF2563EB),
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = isVibrateSelected,
-                                    borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                    selectedBorderColor = Color(0xFF2563EB),
-                                    borderWidth = 1.dp,
-                                    selectedBorderWidth = 1.5.dp
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("sound_mode_vibrate_chip")
-                            )
-
-                            // 3. Silent
-                            val isSilentSelected = soundProfile == "SILENT"
-                            FilterChip(
-                                selected = isSilentSelected,
-                                onClick = { soundProfile = "SILENT" },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.VolumeOff,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                label = { Text("Silent", fontWeight = if (isSilentSelected) FontWeight.Bold else FontWeight.Medium) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                    selectedLabelColor = Color(0xFF1D4ED8),
-                                    selectedLeadingIconColor = Color(0xFF2563EB),
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = isSilentSelected,
-                                    borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                    selectedBorderColor = Color(0xFF2563EB),
-                                    borderWidth = 1.dp,
-                                    selectedBorderWidth = 1.5.dp
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("sound_mode_silent_chip")
-                            )
-                        }
+                        ConnectedChoiceGroup(
+                            options = listOf(
+                                ChoiceOption("NORMAL", "Ring", Icons.Default.NotificationsActive, "sound_mode_ring_chip"),
+                                ChoiceOption("VIBRATE", "Vibrate", Icons.Default.Vibration, "sound_mode_vibrate_chip"),
+                                ChoiceOption("SILENT", "Silent", Icons.Default.VolumeOff, "sound_mode_silent_chip")
+                            ),
+                            selected = if (soundProfile == "RING") "NORMAL" else soundProfile,
+                            onSelect = { soundProfile = it }
+                        )
 
                         // Mode Description Banner
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = MaterialTheme.shapes.small,
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -3569,7 +3377,7 @@ fun RoutineEditor(
                         if (soundProfile == "VIBRATE" || soundProfile == "SILENT") {
                             if (isDndGranted || isShizukuReady) {
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -3585,7 +3393,7 @@ fun RoutineEditor(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = if (isDndGranted) "✓ Do Not Disturb access active (native system control ready)" else "✓ Shizuku privileged access active (automated control ready)",
+                                            text = if (isDndGranted) "Do Not Disturb access active (native system control ready)" else "Shizuku privileged access active (automated control ready)",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
@@ -3593,16 +3401,16 @@ fun RoutineEditor(
                                 }
                             } else {
                                 Surface(
-                                    shape = RoundedCornerShape(16.dp),
+                                    shape = MaterialTheme.shapes.large,
                                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                                     border = BorderStroke(
                                         width = 1.5.dp,
                                         brush = Brush.horizontalGradient(
                                             colors = listOf(
-                                                Color(0xFFEF4444),
-                                                Color(0xFFF87171),
-                                                Color(0xFFFCA5A5),
-                                                Color(0xFFEF4444)
+                                                MaterialTheme.colorScheme.error,
+                                                MaterialTheme.colorScheme.error,
+                                                MaterialTheme.colorScheme.errorContainer,
+                                                MaterialTheme.colorScheme.error
                                             )
                                         )
                                     ),
@@ -3621,14 +3429,14 @@ fun RoutineEditor(
                                         ) {
                                             Surface(
                                                 shape = CircleShape,
-                                                color = Color(0xFFEF4444),
+                                                color = MaterialTheme.colorScheme.error,
                                                 modifier = Modifier.size(32.dp)
                                             ) {
                                                 Box(contentAlignment = Alignment.Center) {
                                                     Icon(
                                                         imageVector = Icons.Default.Warning,
                                                         contentDescription = null,
-                                                        tint = Color.White,
+                                                        tint = MaterialTheme.colorScheme.onError,
                                                         modifier = Modifier.size(16.dp)
                                                     )
                                                 }
@@ -3637,8 +3445,7 @@ fun RoutineEditor(
                                             Column {
                                                 Text(
                                                     text = "Do Not Disturb Permission Required",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.labelMediumEmphasized,
                                                     color = MaterialTheme.colorScheme.onErrorContainer
                                                 )
                                                 Text(
@@ -3664,10 +3471,10 @@ fun RoutineEditor(
                                                     context.startActivity(fallback)
                                                 }
                                             },
-                                            shape = RoundedCornerShape(12.dp),
+                                            shape = MaterialTheme.shapes.medium,
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = Color(0xFFDC2626),
-                                                contentColor = Color.White
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = MaterialTheme.colorScheme.onError
                                             ),
                                             elevation = ButtonDefaults.buttonElevation(
                                                 defaultElevation = 2.dp,
@@ -3725,13 +3532,12 @@ fun RoutineEditor(
                                     ) {
                                         Text(
                                             text = "Media & Ring Volume",
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodySmallEmphasized,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
                                             text = "$soundVolumePercent%",
                                             style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                     }
@@ -3758,8 +3564,8 @@ fun RoutineEditor(
                                                 onClick = { soundVolumePercent = vol },
                                                 label = { Text(label, fontSize = 11.sp, fontWeight = if (isVolSelected) FontWeight.Bold else FontWeight.Medium) },
                                                 colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                                    selectedLabelColor = Color(0xFF1D4ED8),
+                                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                                    selectedLabelColor = MaterialTheme.colorScheme.primary,
                                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                                 ),
@@ -3767,11 +3573,11 @@ fun RoutineEditor(
                                                     enabled = true,
                                                     selected = isVolSelected,
                                                     borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                                    selectedBorderColor = Color(0xFF2563EB),
+                                                    selectedBorderColor = MaterialTheme.colorScheme.primary,
                                                     borderWidth = 1.dp,
                                                     selectedBorderWidth = 1.5.dp
                                                 ),
-                                                shape = RoundedCornerShape(10.dp),
+                                                shape = MaterialTheme.shapes.small,
                                                 modifier = Modifier.weight(1f)
                                             )
                                         }
@@ -3833,13 +3639,13 @@ fun RoutineEditor(
                                 )
                             },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF2563EB),
-                                focusedLabelColor = Color(0xFF2563EB),
-                                focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("custom_notif_title_input")
@@ -3854,13 +3660,13 @@ fun RoutineEditor(
                             minLines = 2,
                             maxLines = 3,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF2563EB),
-                                focusedLabelColor = Color(0xFF2563EB),
-                                focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("custom_notif_message_input")
@@ -3870,8 +3676,7 @@ fun RoutineEditor(
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = "Choose Notification Icon",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
@@ -3901,7 +3706,7 @@ fun RoutineEditor(
                                             haptics.selectionTick()
                                             customNotificationIcon = iconKey
                                         },
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = MaterialTheme.shapes.medium,
                                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                         border = BorderStroke(
                                             width = if (isSelected) 1.5.dp else 1.dp,
@@ -3948,7 +3753,7 @@ fun RoutineEditor(
                                             haptics.selectionTick()
                                             customNotificationIcon = iconKey
                                         },
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = MaterialTheme.shapes.medium,
                                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                         border = BorderStroke(
                                             width = if (isSelected) 1.5.dp else 1.dp,
@@ -3987,8 +3792,7 @@ fun RoutineEditor(
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = "Delivery Timing",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
@@ -4026,9 +3830,9 @@ fun RoutineEditor(
                                             )
                                         },
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Color(0xFF2563EB).copy(alpha = 0.16f),
-                                            selectedLabelColor = Color(0xFF1D4ED8),
-                                            selectedLeadingIconColor = Color(0xFF2563EB),
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                            selectedLabelColor = MaterialTheme.colorScheme.primary,
+                                            selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
                                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                             labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                         ),
@@ -4036,11 +3840,11 @@ fun RoutineEditor(
                                             enabled = true,
                                             selected = isSelected,
                                             borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                            selectedBorderColor = Color(0xFF2563EB),
+                                            selectedBorderColor = MaterialTheme.colorScheme.primary,
                                             borderWidth = 1.dp,
                                             selectedBorderWidth = 1.5.dp
                                         ),
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = MaterialTheme.shapes.medium,
                                         modifier = Modifier
                                             .weight(1f)
                                             .testTag("notif_sched_${typeKey.lowercase()}")
@@ -4052,7 +3856,7 @@ fun RoutineEditor(
                         // Time Selection (shown when ONCE or DAILY)
                         if (customNotificationScheduleType == "ONCE" || customNotificationScheduleType == "DAILY") {
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = MaterialTheme.shapes.large,
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxWidth()
@@ -4077,19 +3881,17 @@ fun RoutineEditor(
                                             Text(
                                                 text = if (customNotificationScheduleType == "DAILY") "Every Day At Time" else "Trigger Once At Time",
                                                 style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold
                                             )
                                         }
 
                                         Surface(
-                                            shape = RoundedCornerShape(8.dp),
+                                            shape = MaterialTheme.shapes.small,
                                             color = MaterialTheme.colorScheme.primaryContainer,
                                             modifier = Modifier.padding(start = 8.dp)
                                         ) {
                                             Text(
                                                 text = customNotificationTime,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.ExtraBold,
+                                                style = MaterialTheme.typography.titleMediumEmphasized,
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                             )
@@ -4120,7 +3922,7 @@ fun RoutineEditor(
                                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                                 ),
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = MaterialTheme.shapes.small,
                                                 modifier = Modifier.weight(1f)
                                             )
                                         }
@@ -4182,22 +3984,30 @@ fun RoutineEditor(
                                     }
 
                                     // Schedule Summary Text
-                                    Text(
-                                        text = if (customNotificationScheduleType == "DAILY")
-                                            "✓ Notification will trigger every day at $customNotificationTime"
-                                        else
-                                            "✓ Notification will trigger once at $customNotificationTime",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (customNotificationScheduleType == "DAILY")
+                                                "Notification will trigger every day at $customNotificationTime"
+                                            else
+                                                "Notification will trigger once at $customNotificationTime",
+                                            style = MaterialTheme.typography.bodySmallEmphasized,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         // Preview of Notification Banner
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = MaterialTheme.shapes.medium,
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
                             modifier = Modifier.fillMaxWidth()
@@ -4243,7 +4053,6 @@ fun RoutineEditor(
                                     Text(
                                         text = customNotificationTitle.ifBlank { "Routine Alert" },
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -4268,7 +4077,7 @@ fun RoutineEditor(
                 var showAdvancedShell by remember { mutableStateOf(false) }
 
                 Surface(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
@@ -4301,7 +4110,6 @@ fun RoutineEditor(
                                     Text(
                                         text = "Add Custom Shell Command",
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
@@ -4332,8 +4140,7 @@ fun RoutineEditor(
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
                             text = "Enter privileged shell or adb command to execute upon routine activation:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
@@ -4366,16 +4173,16 @@ fun RoutineEditor(
                                 },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF2563EB),
-                                    focusedLabelColor = Color(0xFF2563EB),
-                                    focusedContainerColor = Color(0xFF2563EB).copy(alpha = 0.035f),
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.035f),
                                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("custom_command_input"),
-                                shape = RoundedCornerShape(16.dp)
+                                shape = MaterialTheme.shapes.large
                             )
 
                             // Visually distinct prominent primary '+' button (56dp square for seamless touch target)
@@ -4386,7 +4193,7 @@ fun RoutineEditor(
                                         newCustomCommand = ""
                                     }
                                 },
-                                shape = RoundedCornerShape(16.dp),
+                                shape = MaterialTheme.shapes.large,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -4412,8 +4219,7 @@ fun RoutineEditor(
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = "Configured Custom Shell Commands (${customShellCommands.size}):",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelMediumEmphasized,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -4422,8 +4228,8 @@ fun RoutineEditor(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 3.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFF1E1E24))
+                                        .clip(MaterialTheme.shapes.small)
+                                        .background(MaterialTheme.colorScheme.inverseSurface)
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
@@ -4432,14 +4238,14 @@ fun RoutineEditor(
                                         text = cmd,
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 11.sp,
-                                        color = Color(0xFF81C995),
+                                        color = MaterialTheme.colorScheme.inversePrimary,
                                         modifier = Modifier.weight(1f)
                                     )
                                     IconButton(
                                         onClick = { customShellCommands.removeAt(index) },
                                         modifier = Modifier.size(26.dp)
                                     ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                                     }
                                 }
                             }
@@ -4455,15 +4261,14 @@ fun RoutineEditor(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "Generated Shell Script Execution Plan:",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
+                                    style = MaterialTheme.typography.labelMediumEmphasized,
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFF16161D))
+                                        .clip(MaterialTheme.shapes.small)
+                                        .background(MaterialTheme.colorScheme.inverseSurface)
                                         .padding(10.dp)
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4472,7 +4277,7 @@ fun RoutineEditor(
                                                 text = "$ $cmd",
                                                 fontFamily = FontFamily.Monospace,
                                                 fontSize = 11.5.sp,
-                                                color = Color(0xFF64B5F6)
+                                                color = MaterialTheme.colorScheme.inversePrimary
                                             )
                                         }
                                     }
@@ -4502,7 +4307,7 @@ fun RoutineEditor(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("test_commands_btn"),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = MaterialTheme.shapes.medium
                             ) {
                                 Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -4530,7 +4335,7 @@ fun RoutineEditor(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             elevation = CardDefaults.elevatedCardElevation(
                 defaultElevation = if (restoreOnEnd) 4.dp else 2.dp,
                 pressedElevation = 6.dp
@@ -4575,8 +4380,7 @@ fun RoutineEditor(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "Auto-Restore",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.titleMediumEmphasized,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -4605,16 +4409,15 @@ fun RoutineEditor(
                                                 .clip(CircleShape)
                                                 .background(
                                                     if (restoreOnEnd)
-                                                        Color(0xFF00897B)
+                                                        MaterialTheme.colorScheme.tertiary
                                                     else
                                                         MaterialTheme.colorScheme.outline
                                                 )
                                         )
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            text = if (restoreOnEnd) "ENABLED" else "OFF",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
+                                            text = if (restoreOnEnd) "On" else "Off",
+                                            style = MaterialTheme.typography.labelSmallEmphasized,
                                             color = if (restoreOnEnd)
                                                 MaterialTheme.colorScheme.onTertiaryContainer
                                             else
@@ -4642,7 +4445,7 @@ fun RoutineEditor(
 
                 // High-visibility informative banner
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.large,
                     color = if (restoreOnEnd)
                         MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
                     else
@@ -4663,7 +4466,7 @@ fun RoutineEditor(
                         Icon(
                             imageVector = if (restoreOnEnd) Icons.Default.CheckCircle else Icons.Default.Warning,
                             contentDescription = null,
-                            tint = if (restoreOnEnd) Color(0xFF00897B) else MaterialTheme.colorScheme.outline,
+                            tint = if (restoreOnEnd) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -4718,15 +4521,7 @@ fun RoutineEditor(
                             .weight(1f)
                             .height(48.dp)
                             .testTag("save_routine_button"),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 0.dp,
-                            pressedElevation = 2.dp
-                        )
+                        shapes = ButtonDefaults.shapes()
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
@@ -4735,9 +4530,8 @@ fun RoutineEditor(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Save Routine",
+                            text = "Save routine",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
                         )
                     }
 
@@ -4761,7 +4555,7 @@ fun RoutineEditor(
                             val actions = buildActions()
                             val triggerSummary = conditionsSummary()
                             val shareContent = buildString {
-                                appendLine("⚡ Routine: ${routineName.trim().ifBlank { "Untitled Routine" }}")
+                                appendLine("Routine: ${routineName.trim().ifBlank { "Untitled Routine" }}")
                                 if (description.isNotBlank()) appendLine("Description: $description")
                                 appendLine("Trigger: $triggerSummary")
                                 appendLine("Configured Actions (${actions.size}):")
@@ -4826,7 +4620,6 @@ fun RoutineEditor(
                 Text(
                     text = "Routine Overview",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
                 )
             },
             text = {
@@ -4845,7 +4638,6 @@ fun RoutineEditor(
                         Text(
                             text = routineName.trim().ifBlank { "Untitled Routine" },
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
                         )
                     }
 
@@ -4861,9 +4653,8 @@ fun RoutineEditor(
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = "TRIGGER",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
+                            text = "If",
+                            style = MaterialTheme.typography.labelSmallEmphasized,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
@@ -4871,11 +4662,20 @@ fun RoutineEditor(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         if (conditionTypes.any { it.isTimeBased }) {
-                            Text(
-                                text = "✓ Precision AlarmManager RTC_WAKEUP active",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Precision AlarmManager RTC_WAKEUP active",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
                         }
                     }
 
@@ -4883,9 +4683,8 @@ fun RoutineEditor(
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = "ACTIONS (${configuredActions.size} CONFIGURED)",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
+                            text = "Then (${configuredActions.size} actions)",
+                            style = MaterialTheme.typography.labelSmallEmphasized,
                             color = MaterialTheme.colorScheme.primary
                         )
                         if (configuredActions.isEmpty()) {
@@ -4939,7 +4738,6 @@ fun RoutineEditor(
                 Text(
                     text = "Quick Edit Routine",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
                 )
             },
             text = {
@@ -5013,7 +4811,7 @@ private fun ActionSettingCard(
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         elevation = CardDefaults.elevatedCardElevation(
             defaultElevation = if (isActive) 2.dp else 0.dp,
             pressedElevation = 4.dp
@@ -5125,11 +4923,11 @@ fun InstalledAppIcon(
         Image(
             bitmap = iconBitmap!!,
             contentDescription = null,
-            modifier = modifier.clip(RoundedCornerShape(8.dp))
+            modifier = modifier.clip(MaterialTheme.shapes.small)
         )
     } else {
         Surface(
-            shape = RoundedCornerShape(8.dp),
+            shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
             modifier = modifier
         ) {
@@ -5154,4 +4952,16 @@ private fun triggerTypeIcon(type: TriggerType): androidx.compose.ui.graphics.vec
     TriggerType.BLUETOOTH -> Icons.Default.Bluetooth
     TriggerType.BATTERY -> Icons.Default.BatteryChargingFull
     TriggerType.APP -> Icons.Default.PlayArrow
+}
+
+/**
+ * Runs [block] synchronously the first time [key] is composed (and again if it changes), so the
+ * editor's state is filled from the routine before anything reads it, without a blank first frame.
+ */
+@Composable
+private fun LoadOncePerKey(key: Any?, block: () -> Unit) {
+    remember(key) {
+        block()
+        key
+    }
 }

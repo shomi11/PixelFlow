@@ -1,5 +1,7 @@
 package com.vpmapps.pixelflow.ui.screens
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -44,8 +46,7 @@ fun CreateRoutineScreen(
                 title = {
                     Text(
                         text = if (existingRoutine != null) "Edit Routine" else "New Routine",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold,
+                        style = MaterialTheme.typography.headlineMediumEmphasized,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 },
@@ -71,9 +72,12 @@ fun CreateRoutineScreen(
                 }
             },
             onCancel = onNavigateBack,
+            // Keep the pinned Save bar above the keyboard while typing
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
         )
     }
 }

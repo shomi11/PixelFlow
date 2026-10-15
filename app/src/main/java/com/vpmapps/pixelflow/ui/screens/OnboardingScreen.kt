@@ -1,5 +1,6 @@
 package com.vpmapps.pixelflow.ui.screens
 
+import com.vpmapps.pixelflow.ui.theme.extendedColors
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -169,7 +170,6 @@ fun OnboardingScreen(
                     Text(
                         text = "PixelFlow",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 }
@@ -253,7 +253,7 @@ fun OnboardingScreen(
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
                         },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         modifier = Modifier.testTag("onboarding_next_button")
                     ) {
                         Text("Next")
@@ -267,7 +267,7 @@ fun OnboardingScreen(
                 } else {
                     Button(
                         onClick = onFinishOnboarding,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         ),
@@ -307,7 +307,7 @@ private fun OnboardingIntroSlide() {
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .clip(RoundedCornerShape(30.dp))
+                .clip(MaterialTheme.shapes.extraLarge)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
@@ -330,8 +330,7 @@ private fun OnboardingIntroSlide() {
 
         Text(
             text = "Automate Hidden System Controls",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
+            style = MaterialTheme.typography.headlineMediumEmphasized,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -350,7 +349,7 @@ private fun OnboardingIntroSlide() {
         // Informative routine preview card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.largeIncreased,
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
@@ -369,13 +368,13 @@ private fun OnboardingIntroSlide() {
                             modifier = Modifier
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF3871E0).copy(alpha = 0.2f)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Schedule,
                                 contentDescription = null,
-                                tint = Color(0xFF3871E0),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -384,7 +383,6 @@ private fun OnboardingIntroSlide() {
                             Text(
                                 text = "Bedtime Routine",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Trigger: 22:30 - 07:00 (Daily)",
@@ -396,12 +394,12 @@ private fun OnboardingIntroSlide() {
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(MaterialTheme.shapes.small)
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "EXAMPLE",
+                            text = "Example",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -410,7 +408,7 @@ private fun OnboardingIntroSlide() {
                 }
 
                 Card(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                     ),
@@ -431,11 +429,11 @@ private fun OnboardingIntroSlide() {
                                 Text("Always-On Display (AOD)")
                             }
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
                                 Text(
-                                    text = "Turn OFF",
+                                    text = "Turn off",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -455,7 +453,7 @@ private fun OnboardingIntroSlide() {
                                 Text("System Theme")
                             }
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
                                 Text(
@@ -479,7 +477,7 @@ private fun OnboardingIntroSlide() {
                                 Text("Screen Timeout")
                             }
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
                                 Text(
@@ -517,12 +515,12 @@ private fun OnboardingShizukuSlide(
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .clip(RoundedCornerShape(30.dp))
+                .clip(MaterialTheme.shapes.extraLarge)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF2E7D32).copy(alpha = 0.25f),
-                            Color(0xFF1B6EF3).copy(alpha = 0.15f)
+                            MaterialTheme.extendedColors.success.copy(alpha = 0.25f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         )
                     )
                 ),
@@ -531,7 +529,7 @@ private fun OnboardingShizukuSlide(
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = null,
-                tint = Color(0xFF1E8E3E),
+                tint = MaterialTheme.extendedColors.success,
                 modifier = Modifier.size(54.dp)
             )
         }
@@ -540,8 +538,7 @@ private fun OnboardingShizukuSlide(
 
         Text(
             text = "Rootless Privileges via Shizuku",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
+            style = MaterialTheme.typography.headlineMediumEmphasized,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -560,7 +557,7 @@ private fun OnboardingShizukuSlide(
         // Informative 3-Step Overview Card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.largeIncreased,
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
@@ -577,18 +574,17 @@ private fun OnboardingShizukuSlide(
                     Text(
                         text = "How It Works",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
                     )
 
                     val (statusLabel, statusColor) = when (shizukuState) {
-                        ShizukuState.AUTHORIZED -> "SHIZUKU READY" to Color(0xFF2E7D32)
-                        ShizukuState.PERMISSION_REQUIRED -> "READY TO PAIR" to Color(0xFFF57C00)
-                        ShizukuState.UNAVAILABLE -> "OPTIONAL SETUP" to Color(0xFF1976D2)
+                        ShizukuState.AUTHORIZED -> "Shizuku ready" to MaterialTheme.extendedColors.success
+                        ShizukuState.PERMISSION_REQUIRED -> "Ready to pair" to MaterialTheme.extendedColors.warning
+                        ShizukuState.UNAVAILABLE -> "Optional setup" to MaterialTheme.colorScheme.primary
                     }
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(MaterialTheme.shapes.small)
                             .background(statusColor.copy(alpha = 0.15f))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
@@ -624,21 +620,21 @@ private fun OnboardingShizukuSlide(
 
                 // Informative code note
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF1E1E24),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.inverseSurface,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = "$ adb shell sh /sdcard/Android/data/.../start.sh",
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
-                        color = Color(0xFF81C995),
+                        color = MaterialTheme.colorScheme.inversePrimary,
                         modifier = Modifier.padding(10.dp)
                     )
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = MaterialTheme.shapes.small,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -684,8 +680,7 @@ private fun InformativeStepRow(
         ) {
             Text(
                 text = stepNumber,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMediumEmphasized,
                 color = MaterialTheme.colorScheme.primary
             )
         }
@@ -694,7 +689,6 @@ private fun InformativeStepRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -723,12 +717,12 @@ private fun OnboardingTriggersAndTerminalSlide() {
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .clip(RoundedCornerShape(30.dp))
+                .clip(MaterialTheme.shapes.extraLarge)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF1976D2).copy(alpha = 0.25f),
-                            Color(0xFF9334E6).copy(alpha = 0.15f)
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
                         )
                     )
                 ),
@@ -737,7 +731,7 @@ private fun OnboardingTriggersAndTerminalSlide() {
             Icon(
                 imageVector = Icons.Default.Terminal,
                 contentDescription = null,
-                tint = Color(0xFF64B5F6),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(54.dp)
             )
         }
@@ -746,8 +740,7 @@ private fun OnboardingTriggersAndTerminalSlide() {
 
         Text(
             text = "Precision Triggers & Terminal",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
+            style = MaterialTheme.typography.headlineMediumEmphasized,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -777,7 +770,7 @@ private fun OnboardingTriggersAndTerminalSlide() {
                 Icons.Default.PlayArrow to "App Launch"
             ).forEach { (icon, name) ->
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = 4.dp)
                 ) {
@@ -798,8 +791,8 @@ private fun OnboardingTriggersAndTerminalSlide() {
         // Monospace Terminal card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D))
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.inverseSurface)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -811,16 +804,16 @@ private fun OnboardingTriggersAndTerminalSlide() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "ADB PRIVILEGED ACTIONS",
+                        text = "ADB privileged actions",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF81C995),
+                        color = MaterialTheme.colorScheme.inversePrimary,
                         fontFamily = FontFamily.Monospace
                     )
                     Icon(
                         Icons.Default.Code,
                         contentDescription = null,
-                        tint = Color.Gray,
+                        tint = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.6f),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -830,7 +823,7 @@ private fun OnboardingTriggersAndTerminalSlide() {
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     lineHeight = 18.sp,
-                    color = Color(0xFF64B5F6)
+                    color = MaterialTheme.colorScheme.inversePrimary
                 )
             }
         }
@@ -856,7 +849,7 @@ private fun OnboardingReadySlide(
         Box(
             modifier = Modifier
                 .size(100.dp)
-                .clip(RoundedCornerShape(30.dp))
+                .clip(MaterialTheme.shapes.extraLarge)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
@@ -879,8 +872,7 @@ private fun OnboardingReadySlide(
 
         Text(
             text = "You're in Full Control",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
+            style = MaterialTheme.typography.headlineMediumEmphasized,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
@@ -899,7 +891,7 @@ private fun OnboardingReadySlide(
         // Checklist Card
         ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.largeIncreased,
             colors = CardDefaults.elevatedCardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
@@ -942,13 +934,13 @@ private fun ChecklistItem(
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF2E7D32).copy(alpha = 0.15f)),
+                .background(MaterialTheme.extendedColors.success.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = null,
-                tint = Color(0xFF2E7D32),
+                tint = MaterialTheme.extendedColors.success,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -957,7 +949,6 @@ private fun ChecklistItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,

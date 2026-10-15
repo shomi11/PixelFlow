@@ -1,7 +1,6 @@
 package com.vpmapps.pixelflow.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -14,11 +13,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 
 /**
- * Expressive FilterChip with rich, high-contrast active state,
- * distinct state-specific accent color overlays, and clear touch elevation.
+ * Material 3 filter chip with haptic feedback. Colors come from the theme; [accentColor] tints the
+ * selected state for content-specific accents.
  */
 @Composable
 fun ExpressiveFilterChip(
@@ -29,14 +27,14 @@ fun ExpressiveFilterChip(
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
-    accentColor: Color = Color(0xFF2563EB), // Vibrant Accent Blue
-    shape: Shape = RoundedCornerShape(14.dp)
+    accentColor: Color = MaterialTheme.colorScheme.primary,
+    shape: Shape = FilterChipDefaults.shape
 ) {
     val haptic = LocalHapticFeedback.current
     FilterChip(
         selected = selected,
         onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
             onClick()
         },
         label = label,
@@ -46,24 +44,14 @@ fun ExpressiveFilterChip(
         shape = shape,
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = accentColor.copy(alpha = 0.16f),
-            selectedLabelColor = Color(0xFF1D4ED8),
+            selectedLabelColor = accentColor,
             selectedLeadingIconColor = accentColor,
-            selectedTrailingIconColor = accentColor,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+            selectedTrailingIconColor = accentColor
         ),
         border = FilterChipDefaults.filterChipBorder(
             enabled = enabled,
             selected = selected,
-            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-            selectedBorderColor = accentColor,
-            borderWidth = 1.dp,
-            selectedBorderWidth = 1.5.dp
-        ),
-        elevation = FilterChipDefaults.filterChipElevation(
-            elevation = 0.dp,
-            pressedElevation = 3.dp,
-            focusedElevation = 2.dp
+            selectedBorderColor = accentColor
         ),
         modifier = modifier
     )

@@ -83,7 +83,6 @@ fun ShizukuConsoleDialog(
                 Text(
                     text = "Shizuku Shell Console",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
                 )
             }
         },
@@ -103,7 +102,7 @@ fun ShizukuConsoleDialog(
                             ShizukuState.UNAVAILABLE -> MaterialTheme.colorScheme.surfaceVariant
                         }
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Row(
                         modifier = Modifier
@@ -133,8 +132,7 @@ fun ShizukuConsoleDialog(
                                     ShizukuState.PERMISSION_REQUIRED -> "Binder Available - Permission Required"
                                     ShizukuState.UNAVAILABLE -> "Shizuku Service Not Running (Simulation Mode)"
                                 },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.bodyMediumEmphasized,
                             )
                         }
                         if (shizukuState == ShizukuState.PERMISSION_REQUIRED) {
@@ -150,8 +148,7 @@ fun ShizukuConsoleDialog(
 
                 Text(
                     text = "Quick Command Presets",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLargeEmphasized,
                     color = MaterialTheme.colorScheme.primary
                 )
 
@@ -206,23 +203,22 @@ fun ShizukuConsoleDialog(
                 if (lastResult != null) {
                     Text(
                         text = "Output (Exit code: ${lastResult.exitCode})",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.labelMediumEmphasized,
                     )
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 90.dp, max = 180.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1E1E24))
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.inverseSurface)
                             .padding(10.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
                         Column {
                             Text(
                                 text = "$ ${lastResult.executedCommand}",
-                                color = Color(0xFF81D4FA),
+                                color = MaterialTheme.colorScheme.inversePrimary,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp
                             )
@@ -230,7 +226,7 @@ fun ShizukuConsoleDialog(
                             if (lastResult.stdout.isNotBlank()) {
                                 Text(
                                     text = lastResult.stdout,
-                                    color = Color(0xFFA5D6A7),
+                                    color = MaterialTheme.colorScheme.inversePrimary,
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 12.sp
                                 )
@@ -238,7 +234,7 @@ fun ShizukuConsoleDialog(
                             if (lastResult.stderr.isNotBlank()) {
                                 Text(
                                     text = lastResult.stderr,
-                                    color = Color(0xFFEF9A9A),
+                                    color = MaterialTheme.colorScheme.errorContainer,
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 12.sp
                                 )

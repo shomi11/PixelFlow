@@ -1,5 +1,6 @@
 package com.vpmapps.pixelflow.ui.components
 
+import com.vpmapps.pixelflow.ui.theme.extendedColors
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -108,7 +109,7 @@ fun ShizukuDiagnosticsDialog(
                 .fillMaxWidth(0.95f)
                 .fillMaxHeight(0.88f)
                 .testTag("shizuku_diagnostics_dialog"),
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
@@ -143,7 +144,6 @@ fun ShizukuDiagnosticsDialog(
                             Text(
                                 text = "Shizuku Diagnostics",
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Binder & Wireless Debugging Telemetry",
@@ -176,7 +176,7 @@ fun ShizukuDiagnosticsDialog(
                             isRunningCheck = false
                             Toast.makeText(context, "Diagnostics updated", Toast.LENGTH_SHORT).show()
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("rerun_diagnostics_btn")
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -190,7 +190,7 @@ fun ShizukuDiagnosticsDialog(
                             clipboardManager.setText(AnnotatedString(report))
                             Toast.makeText(context, "Diagnostic report copied to clipboard", Toast.LENGTH_SHORT).show()
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("copy_diagnostics_report_btn")
                     ) {
                         Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -212,7 +212,7 @@ fun ShizukuDiagnosticsDialog(
                                 }
                             }
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("diag_wireless_settings_btn")
                     ) {
                         Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -234,7 +234,7 @@ fun ShizukuDiagnosticsDialog(
                                 }
                             }
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("diag_launch_shizuku_btn")
                     ) {
                         Icon(Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -244,7 +244,7 @@ fun ShizukuDiagnosticsDialog(
 
                     OutlinedButton(
                         onClick = onRequestPermission,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("diag_request_permission_btn")
                     ) {
                         Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -261,7 +261,7 @@ fun ShizukuDiagnosticsDialog(
                                 Toast.makeText(context, "Shizuku offline. Start Wireless Debugging.", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("diag_reconnect_btn")
                     ) {
                         Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -271,7 +271,7 @@ fun ShizukuDiagnosticsDialog(
 
                     OutlinedButton(
                         onClick = { NetworkStatusMonitor.openHotspotSettings(context) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("diag_hotspot_btn")
                     ) {
                         Icon(Icons.Default.WifiTethering, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -281,7 +281,7 @@ fun ShizukuDiagnosticsDialog(
 
                     OutlinedButton(
                         onClick = { NetworkStatusMonitor.openShizukuAppDetails(context) },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.testTag("diag_shizuku_battery_btn")
                     ) {
                         Icon(Icons.Default.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -328,15 +328,15 @@ fun ShizukuDiagnosticsDialog(
 @Composable
 private fun DiagnosticItemCard(entry: ShizukuDiagnosticEntry) {
     val (badgeBg, badgeFg, icon) = when (entry.level) {
-        DiagnosticLevel.SUCCESS -> Triple(Color(0xFF2E7D32).copy(alpha = 0.15f), Color(0xFF2E7D32), Icons.Default.CheckCircle)
-        DiagnosticLevel.INFO -> Triple(Color(0xFF1976D2).copy(alpha = 0.15f), Color(0xFF1976D2), Icons.Default.Info)
-        DiagnosticLevel.WARNING -> Triple(Color(0xFFF57C00).copy(alpha = 0.15f), Color(0xFFF57C00), Icons.Default.Warning)
+        DiagnosticLevel.SUCCESS -> Triple(MaterialTheme.extendedColors.success.copy(alpha = 0.15f), MaterialTheme.extendedColors.success, Icons.Default.CheckCircle)
+        DiagnosticLevel.INFO -> Triple(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), MaterialTheme.colorScheme.primary, Icons.Default.Info)
+        DiagnosticLevel.WARNING -> Triple(MaterialTheme.extendedColors.warning.copy(alpha = 0.15f), MaterialTheme.extendedColors.warning, Icons.Default.Warning)
         DiagnosticLevel.ERROR -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error, Icons.Default.ErrorOutline)
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
@@ -351,7 +351,7 @@ private fun DiagnosticItemCard(entry: ShizukuDiagnosticEntry) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .background(badgeBg)
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
@@ -369,7 +369,6 @@ private fun DiagnosticItemCard(entry: ShizukuDiagnosticEntry) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = entry.stage,
-                        fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall
                     )
                 }
@@ -396,15 +395,15 @@ private fun DiagnosticItemCard(entry: ShizukuDiagnosticEntry) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF1E1E24))
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.inverseSurface)
                         .padding(8.dp)
                 ) {
                     Text(
                         text = entry.technicalDetails,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 10.sp,
-                        color = Color(0xFF81C995)
+                        color = MaterialTheme.colorScheme.inversePrimary
                     )
                 }
             }
@@ -415,15 +414,15 @@ private fun DiagnosticItemCard(entry: ShizukuDiagnosticEntry) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFFFF8E1))
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.extendedColors.warningContainer)
                         .padding(8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
                         Icon(
                             Icons.Default.Lightbulb,
                             contentDescription = null,
-                            tint = Color(0xFFF57F17),
+                            tint = MaterialTheme.extendedColors.warning,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -432,12 +431,12 @@ private fun DiagnosticItemCard(entry: ShizukuDiagnosticEntry) {
                                 text = "Suggested Fix:",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
-                                color = Color(0xFFF57F17)
+                                color = MaterialTheme.extendedColors.warning
                             )
                             Text(
                                 text = entry.suggestedFix,
                                 fontSize = 11.sp,
-                                color = Color(0xFF3E2723)
+                                color = MaterialTheme.extendedColors.onWarningContainer
                             )
                         }
                     }

@@ -1,5 +1,12 @@
 package com.vpmapps.pixelflow.ui.screens
 
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItem
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import com.vpmapps.pixelflow.ui.theme.extendedColors
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -132,7 +139,7 @@ import com.vpmapps.pixelflow.ui.viewmodel.RoutineViewModel
 import com.vpmapps.pixelflow.util.SpecialAccessHelper
 import kotlinx.coroutines.flow.collectLatest
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun DashboardScreen(
     viewModel: RoutineViewModel,
@@ -244,18 +251,19 @@ fun DashboardScreen(
         routines
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "PixelFlow",
-                        fontWeight = FontWeight.ExtraBold,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+            LargeFlexibleTopAppBar(
+                title = { Text(text = "PixelFlow") },
+                subtitle = {
+                    val activeCount = routines.count { it.isEnabled }
+                    Text(if (activeCount == 1) "1 routine on" else "$activeCount routines on")
                 },
+                scrollBehavior = scrollBehavior,
                 actions = {
                     // 1. Shizuku Status Chip: Clicking opens the dedicated Shizuku Settings Sheet
                     ShizukuStatusChip(
@@ -377,7 +385,7 @@ fun DashboardScreen(
                     onCreateRoutineClick()
                 },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("New Routine") },
+                text = { Text("New routine") },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_routine_fab")
@@ -395,9 +403,9 @@ fun DashboardScreen(
             if (shizukuState != ShizukuState.AUTHORIZED) {
                 item {
                     val isPermReq = shizukuState == ShizukuState.PERMISSION_REQUIRED
-                    val bannerColor = if (isPermReq) Color(0xFFE65100) else Color(0xFFC62828)
+                    val bannerColor = if (isPermReq) MaterialTheme.extendedColors.warning else MaterialTheme.colorScheme.error
                     ElevatedCard(
-                        shape = RoundedCornerShape(24.dp),
+                        shape = MaterialTheme.shapes.extraLarge,
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
                         colors = CardDefaults.elevatedCardColors(
                             containerColor = MaterialTheme.colorScheme.surface
@@ -438,7 +446,6 @@ fun DashboardScreen(
                                     Text(
                                         text = if (isPermReq) "Shizuku Permission Required" else "Shizuku Service Offline",
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
                                         color = bannerColor
                                     )
                                 }
@@ -452,7 +459,7 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             FilledTonalButton(
                                 onClick = { showShizukuSheet = true },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 Text("Configure")
@@ -462,179 +469,114 @@ fun DashboardScreen(
                 }
             }
 
-            // Exact alarms: without "Alarms & reminders" timed routines fire late (off by default on Android 14+)
+            // Access that specific routines depend on, gathered into one "Finish setup" checklist
             val enabledTypes = routines.filter { it.isEnabled }.flatMap { routine -> routine.triggers.map { it.type } }.toSet()
-            val needsExactAlarms = enabledTypes.any { it == TriggerType.TIME || it == TriggerType.SUNRISE || it == TriggerType.SUNSET }
-            if (needsExactAlarms && !canScheduleExactAlarms) {
-                item {
-                    RoutineAccessBanner(
-                        icon = Icons.Default.Alarm,
-                        title = "Allow alarms & reminders",
-                        message = "Timed routines can run minutes late until you allow exact alarms.",
-                        buttonLabel = "Allow",
-                        onClick = { SpecialAccessHelper.openExactAlarmSettings(context) },
-                        testTag = "exact_alarm_banner"
+            val openDndSettings = {
+                try {
+                    context.startActivity(
+                        Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
                     )
-                }
-            }
-
-            // Battery optimization: without the exemption Android may delay or kill background routines
-            if (enabledTypes.isNotEmpty() && !isBatteryUnrestricted) {
-                item {
-                    RoutineAccessBanner(
-                        icon = Icons.Default.BatteryAlert,
-                        title = "Let routines run in the background",
-                        message = "Battery optimization can delay or stop routines while your phone is idle.",
-                        buttonLabel = "Allow",
-                        onClick = { NetworkStatusMonitor.requestIgnoreBatteryOptimizations(context) },
-                        testTag = "battery_optimization_banner"
-                    )
-                }
-            }
-
-            // Usage access: needed to notice when an app is opened
-            if (TriggerType.APP in enabledTypes && !hasUsageAccess) {
-                item {
-                    RoutineAccessBanner(
-                        icon = Icons.Default.Smartphone,
-                        title = "Allow usage access",
-                        message = "\"App opened\" routines need usage access to see which app is on screen.",
-                        buttonLabel = if (shizukuState == ShizukuState.AUTHORIZED) "Auto-grant" else "Settings",
-                        onClick = {
-                            if (shizukuState == ShizukuState.AUTHORIZED) {
-                                viewModel.grantUsageAccessViaShizuku { granted ->
-                                    hasUsageAccess = granted
-                                    if (!granted) SpecialAccessHelper.openUsageAccessSettings(context)
-                                }
-                            } else {
-                                SpecialAccessHelper.openUsageAccessSettings(context)
-                            }
-                        },
-                        testTag = "usage_access_banner"
-                    )
-                }
-            }
-
-            // Background location: geofences don't fire while the app is closed without it
-            if (TriggerType.LOCATION in enabledTypes && !hasBackgroundLocation) {
-                item {
-                    RoutineAccessBanner(
-                        icon = Icons.Default.LocationOn,
-                        title = "Allow location all the time",
-                        message = "Location routines only work in the background with \"Allow all the time\".",
-                        buttonLabel = "Allow",
-                        onClick = {
-                            if (!com.vpmapps.pixelflow.util.LocationHelper.hasLocationPermission(context)) {
-                                foregroundLocationLauncher.launch(
-                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                                )
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                            }
-                        },
-                        testTag = "background_location_banner"
-                    )
-                }
-            }
-
-            // DND / Sound Mode Access Banner if not granted and sound profiles exist
-            if (!hasDndAccess && routines.any { r -> r.actions.any { a -> a.type.name == "SOUND_PROFILE" } }) {
-                item {
-                    val dndColor = Color(0xFF673AB7) // Material Deep Purple
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = dndColor.copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, dndColor.copy(alpha = 0.25f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                try {
-                                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    // Fallback to app details
-                                    val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = Uri.fromParts("package", context.packageName, null)
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(fallback)
-                                }
-                            }
-                            .testTag("dnd_access_banner")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(dndColor.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Vibration,
-                                    contentDescription = null,
-                                    tint = dndColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Ringer & Vibrate Permission",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = dndColor
-                                )
-                                Text(
-                                    text = "Tap to grant Do Not Disturb access so routines can switch to Vibrate/Silent mode",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (shizukuState == ShizukuState.AUTHORIZED) {
-                                    FilledTonalButton(
-                                        onClick = { viewModel.grantDndAccessViaShizuku() },
-                                        shape = RoundedCornerShape(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                        modifier = Modifier.testTag("dnd_shizuku_grant_btn")
-                                    ) {
-                                        Text("Auto-Grant")
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
-                                Button(
-                                    onClick = {
-                                        try {
-                                            val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
-                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                            }
-                                            context.startActivity(intent)
-                                        } catch (e: Exception) {
-                                            val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                data = Uri.fromParts("package", context.packageName, null)
-                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                            }
-                                            context.startActivity(fallback)
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.testTag("dnd_settings_btn")
-                                ) {
-                                    Text("Settings")
-                                }
-                            }
+                } catch (e: Exception) {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         }
-                    }
+                    )
                 }
             }
+            val setupItems = buildList {
+                // Without "Alarms & reminders" timed routines fire late (off by default on Android 14+)
+                if (enabledTypes.any { it.isTimeBased } && !canScheduleExactAlarms) {
+                    add(
+                        SetupItem(
+                            icon = Icons.Default.Alarm,
+                            title = "Allow alarms & reminders",
+                            message = "Timed routines can run minutes late until you allow exact alarms.",
+                            buttonLabel = "Allow",
+                            onClick = { SpecialAccessHelper.openExactAlarmSettings(context) },
+                            testTag = "exact_alarm_banner"
+                        )
+                    )
+                }
+                // Without the exemption Android may delay or kill background routines
+                if (enabledTypes.isNotEmpty() && !isBatteryUnrestricted) {
+                    add(
+                        SetupItem(
+                            icon = Icons.Default.BatteryAlert,
+                            title = "Let routines run in the background",
+                            message = "Battery optimization can delay or stop routines while your phone is idle.",
+                            buttonLabel = "Allow",
+                            onClick = { NetworkStatusMonitor.requestIgnoreBatteryOptimizations(context) },
+                            testTag = "battery_optimization_banner"
+                        )
+                    )
+                }
+                // Needed to notice when an app is opened
+                if (TriggerType.APP in enabledTypes && !hasUsageAccess) {
+                    add(
+                        SetupItem(
+                            icon = Icons.Default.Smartphone,
+                            title = "Allow usage access",
+                            message = "\"App opened\" routines need usage access to see which app is on screen.",
+                            buttonLabel = if (shizukuState == ShizukuState.AUTHORIZED) "Auto-grant" else "Settings",
+                            onClick = {
+                                if (shizukuState == ShizukuState.AUTHORIZED) {
+                                    viewModel.grantUsageAccessViaShizuku { granted ->
+                                        hasUsageAccess = granted
+                                        if (!granted) SpecialAccessHelper.openUsageAccessSettings(context)
+                                    }
+                                } else {
+                                    SpecialAccessHelper.openUsageAccessSettings(context)
+                                }
+                            },
+                            testTag = "usage_access_banner"
+                        )
+                    )
+                }
+                // Geofences don't fire while the app is closed without background location
+                if (TriggerType.LOCATION in enabledTypes && !hasBackgroundLocation) {
+                    add(
+                        SetupItem(
+                            icon = Icons.Default.LocationOn,
+                            title = "Allow location all the time",
+                            message = "Location routines only work in the background with \"Allow all the time\".",
+                            buttonLabel = "Allow",
+                            onClick = {
+                                if (!com.vpmapps.pixelflow.util.LocationHelper.hasLocationPermission(context)) {
+                                    foregroundLocationLauncher.launch(
+                                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    )
+                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                }
+                            },
+                            testTag = "background_location_banner"
+                        )
+                    )
+                }
+                // Sound profile actions need Do Not Disturb access to switch to Vibrate / Silent
+                if (!hasDndAccess && routines.any { r -> r.actions.any { a -> a.type.name == "SOUND_PROFILE" } }) {
+                    val shizukuReady = shizukuState == ShizukuState.AUTHORIZED
+                    add(
+                        SetupItem(
+                            icon = Icons.Default.Vibration,
+                            title = "Allow ringer & vibrate control",
+                            message = "Grant Do Not Disturb access so routines can switch to Vibrate or Silent.",
+                            buttonLabel = if (shizukuReady) "Auto-grant" else "Settings",
+                            onClick = { if (shizukuReady) viewModel.grantDndAccessViaShizuku() else openDndSettings() },
+                            onRowClick = openDndSettings,
+                            testTag = "dnd_access_banner"
+                        )
+                    )
+                }
+            }
+            if (setupItems.isNotEmpty()) {
+                item {
+                    FinishSetupCard(items = setupItems)
+                }
+            }
+
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -672,15 +614,17 @@ fun DashboardScreen(
             } else {
                 items(displayedRoutines, key = { it.id }) { routine ->
                     val isExecuting = runningRoutineIds.contains(routine.id) || routine.lastExecutionStatus == "RUNNING"
-                    RoutineCard(
-                        routine = routine,
-                        isRunning = isExecuting,
-                        onToggle = { viewModel.toggleRoutine(routine) },
-                        onRunNow = { viewModel.executeRoutineNow(routine) },
-                        onRestoreNow = { viewModel.restoreRoutineNow(routine) },
-                        onEdit = { onEditRoutineClick(routine.id) },
-                        onDelete = { viewModel.deleteRoutine(routine) }
-                    )
+                    Box(modifier = Modifier.animateItem()) {
+                        RoutineCard(
+                            routine = routine,
+                            isRunning = isExecuting,
+                            onToggle = { viewModel.toggleRoutine(routine) },
+                            onRunNow = { viewModel.executeRoutineNow(routine) },
+                            onRestoreNow = { viewModel.restoreRoutineNow(routine) },
+                            onEdit = { onEditRoutineClick(routine.id) },
+                            onDelete = { viewModel.deleteRoutine(routine) }
+                        )
+                    }
                 }
             }
         }
@@ -754,59 +698,96 @@ fun DashboardScreen(
     }
 }
 
+/** One missing permission or system setting that some enabled routines depend on. */
+private data class SetupItem(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val title: String,
+    val message: String,
+    val buttonLabel: String,
+    val onClick: () -> Unit,
+    val testTag: String,
+    val onRowClick: () -> Unit = onClick
+)
+
+/**
+ * A single card listing everything still needed for the user's routines to run reliably,
+ * instead of one banner per permission.
+ */
 @Composable
-private fun RoutineAccessBanner(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    message: String,
-    buttonLabel: String,
-    onClick: () -> Unit,
-    testTag: String
-) {
-    val accent = MaterialTheme.colorScheme.error
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = accent.copy(alpha = 0.08f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
+private fun FinishSetupCard(items: List<SetupItem>) {
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .testTag(testTag)
+            .testTag("finish_setup_card"),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(accent.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+        Column(modifier = Modifier.padding(vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = accent
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
                 )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Finish setup",
+                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    modifier = Modifier.weight(1f)
                 )
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = "${items.size} left",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = onClick,
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(buttonLabel)
+            Text(
+                text = "Your routines need these to run on time in the background.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            items.forEachIndexed { index, item ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                }
+                ListItem(
+                    headlineContent = { Text(item.title, style = MaterialTheme.typography.titleSmall) },
+                    supportingContent = { Text(item.message) },
+                    leadingContent = {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingContent = {
+                        FilledTonalButton(
+                            onClick = item.onClick,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(item.buttonLabel)
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .clickable { item.onRowClick() }
+                        .testTag(item.testTag)
+                )
             }
         }
     }
@@ -851,7 +832,7 @@ fun RoutineCard(
                 onEdit()
             }
             .testTag("routine_card_${routine.id}"),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         elevation = CardDefaults.elevatedCardElevation(
             defaultElevation = if (isCurrentlyRunning) 4.dp else 2.dp,
             pressedElevation = 6.dp
@@ -865,7 +846,7 @@ fun RoutineCard(
             if (isCurrentlyRunning) {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFF00897B).copy(alpha = 0.16f),
+                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
@@ -879,14 +860,13 @@ fun RoutineCard(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF00897B))
+                                .background(MaterialTheme.colorScheme.tertiary)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isExecutingNow) "CURRENTLY RUNNING • Executing actions" else "CURRENTLY RUNNING • Active schedule",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00897B)
+                            text = if (isExecutingNow) "Running • Executing actions" else "Running • Conditions met",
+                            style = MaterialTheme.typography.labelMediumEmphasized,
+                            color = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
@@ -900,7 +880,7 @@ fun RoutineCard(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(MaterialTheme.shapes.medium)
                         .background(accentColor.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -918,7 +898,6 @@ fun RoutineCard(
                     Text(
                         text = routine.title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     if (routine.description.isNotBlank()) {
@@ -943,7 +922,7 @@ fun RoutineCard(
 
             // IF condition badge
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = MaterialTheme.shapes.small,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -953,8 +932,7 @@ fun RoutineCard(
                 ) {
                     Text(
                         text = "IF:",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelSmallEmphasized,
                         color = accentColor
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -975,7 +953,7 @@ fun RoutineCard(
                 if (nextMillis != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -992,8 +970,7 @@ fun RoutineCard(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Next alarm: ${RoutineAlarmManager.formatNextTriggerHumanReadable(nextMillis)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelSmallEmphasized,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -1006,8 +983,7 @@ fun RoutineCard(
             // THEN Actions list
             Text(
                 text = "THEN:",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmallEmphasized,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -1019,7 +995,7 @@ fun RoutineCard(
             ) {
                 actions.forEach { action ->
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = MaterialTheme.shapes.extraSmall,
                         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
                     ) {
                         Text(
@@ -1036,7 +1012,7 @@ fun RoutineCard(
 
             if (routine.restoreOnEnd) {
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
                     shadowElevation = 0.dp,
@@ -1065,9 +1041,8 @@ fun RoutineCard(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "AUTO-RESTORE ACTIVE",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.ExtraBold,
+                                text = "Auto-restore on",
+                                style = MaterialTheme.typography.labelSmallEmphasized,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
                             )
                             Text(
@@ -1147,7 +1122,7 @@ fun RoutineCard(
                             haptics.buttonClick()
                             val acts = actions.joinToString(" • ") { it.toSummary() }
                             val shareText = buildString {
-                                appendLine("⚡ Routine: ${routine.title}")
+                                appendLine("Routine: ${routine.title}")
                                 if (routine.description.isNotBlank()) appendLine("Description: ${routine.description}")
                                 appendLine("Trigger: ${routine.getTriggerSummary()}")
                                 if (acts.isNotBlank()) appendLine("Actions: $acts")
@@ -1224,7 +1199,7 @@ fun RoutineCard(
                 )
             },
             title = {
-                Text(routine.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(routine.title, style = MaterialTheme.typography.titleLarge)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1233,9 +1208,8 @@ fun RoutineCard(
                     }
                     Text(
                         text = "Trigger: ${routine.getTriggerSummary()}",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmallEmphasized,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "Status: ${if (routine.isEnabled) "Active / Scheduled" else "Disabled"}",
@@ -1244,8 +1218,7 @@ fun RoutineCard(
                     if (actions.isNotEmpty()) {
                         Text(
                             "Configured Actions (${actions.size}):",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.labelSmallEmphasized,
                         )
                         actions.forEach { act ->
                             Text("• ${act.toSummary()}", style = MaterialTheme.typography.bodySmall)
@@ -1268,7 +1241,7 @@ fun EmptyRoutinesCard(onCreateRoutineClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 24.dp),
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.largeIncreased,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
     ) {
         Column(
@@ -1288,7 +1261,6 @@ fun EmptyRoutinesCard(onCreateRoutineClick: () -> Unit) {
             Text(
                 text = "No Routines Configured",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -1326,12 +1298,11 @@ fun ShizukuGuideDialog(onDismiss: () -> Unit) {
                             "• Wi-Fi & Bluetooth state\n" +
                             "• Battery Saver mode\n" +
                             "• Screen off timeout",
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmallEmphasized
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Quick Wireless Debugging Setup:",
-                    fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelLarge
                 )
                 Text(
@@ -1395,7 +1366,6 @@ fun NotificationSettingsDialog(
             Text(
                 text = "Routine Execution Alerts",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
             )
         },
         text = {
@@ -1411,7 +1381,7 @@ fun NotificationSettingsDialog(
 
                 // Master Toggle Card
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -1425,8 +1395,7 @@ fun NotificationSettingsDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Execution Alerts",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.bodyLargeEmphasized,
                             )
                             Text(
                                 text = if (isEnabled) "Active in system tray" else "Alerts turned off",
@@ -1445,15 +1414,14 @@ fun NotificationSettingsDialog(
                 // Android 13+ Permission Card
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = "Permission Required (Android 13+)",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLargeEmphasized,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -1475,7 +1443,7 @@ fun NotificationSettingsDialog(
 
                 // Info Details Box
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -1485,8 +1453,7 @@ fun NotificationSettingsDialog(
                     ) {
                         Text(
                             text = "What notifications show:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMediumEmphasized,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(

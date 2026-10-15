@@ -1,5 +1,8 @@
 package com.vpmapps.pixelflow.ui.components
 
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
+import com.vpmapps.pixelflow.ui.theme.extendedColors
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -73,7 +76,7 @@ import com.vpmapps.pixelflow.shizuku.ShizukuState
  * Consolidates all elevated permission controls, wireless debugging options,
  * diagnostic utilities, and terminal console into one clean, organized menu.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ShizukuSettingsSheet(
     state: ShizukuState,
@@ -95,8 +98,6 @@ fun ShizukuSettingsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
         modifier = Modifier.testTag("shizuku_settings_sheet")
     ) {
         Column(
@@ -117,7 +118,7 @@ fun ShizukuSettingsSheet(
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(MaterialTheme.shapes.medium)
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
@@ -133,7 +134,6 @@ fun ShizukuSettingsSheet(
                         Text(
                             text = "Shizuku & System Controls",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "Privileged background automation bridge",
@@ -155,8 +155,8 @@ fun ShizukuSettingsSheet(
             val (statusColor, statusBg, statusTitle, statusDesc, statusIcon) = when (state) {
                 ShizukuState.AUTHORIZED -> {
                     Tuple5(
-                        Color(0xFF2E7D32),
-                        Color(0xFF2E7D32).copy(alpha = 0.12f),
+                        MaterialTheme.extendedColors.success,
+                        MaterialTheme.extendedColors.success.copy(alpha = 0.12f),
                         "Connected & Authorized (v$version)",
                         "Elevated settings (AOD, Sound Profile, Battery Saver) are fully operational.",
                         Icons.Default.CheckCircle
@@ -164,8 +164,8 @@ fun ShizukuSettingsSheet(
                 }
                 ShizukuState.PERMISSION_REQUIRED -> {
                     Tuple5(
-                        Color(0xFFE65100),
-                        Color(0xFFE65100).copy(alpha = 0.12f),
+                        MaterialTheme.extendedColors.warning,
+                        MaterialTheme.extendedColors.warning.copy(alpha = 0.12f),
                         "Permission Required",
                         "Shizuku service is running. Tap Authorize to allow PixelFlow to toggle system settings.",
                         Icons.Default.Key
@@ -173,8 +173,8 @@ fun ShizukuSettingsSheet(
                 }
                 ShizukuState.UNAVAILABLE -> {
                     Tuple5(
-                        Color(0xFFC62828),
-                        Color(0xFFC62828).copy(alpha = 0.12f),
+                        MaterialTheme.colorScheme.error,
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
                         "Shizuku Disconnected / Offline",
                         "The Shizuku daemon is not running on this device. Start it via Wireless Debugging or launch the app.",
                         Icons.Default.ErrorOutline
@@ -183,7 +183,7 @@ fun ShizukuSettingsSheet(
             }
 
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.large,
                 color = statusBg,
                 border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
@@ -212,7 +212,6 @@ fun ShizukuSettingsSheet(
                             Text(
                                 text = statusTitle,
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
                                 color = statusColor
                             )
                             Text(
@@ -235,7 +234,7 @@ fun ShizukuSettingsSheet(
                                 Button(
                                     onClick = onRequestPermission,
                                     colors = ButtonDefaults.buttonColors(containerColor = statusColor),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier
                                         .weight(1f)
                                         .testTag("modal_request_perm_btn")
@@ -260,7 +259,7 @@ fun ShizukuSettingsSheet(
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier
                                         .weight(1f)
                                         .testTag("modal_launch_shizuku_btn")
@@ -273,7 +272,7 @@ fun ShizukuSettingsSheet(
                             ShizukuState.AUTHORIZED -> {
                                 FilledTonalButton(
                                     onClick = onRefresh,
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier
                                         .weight(1f)
                                         .testTag("modal_recheck_btn")
@@ -289,11 +288,11 @@ fun ShizukuSettingsSheet(
                         OutlinedButton(
                             onClick = onReconnect,
                             enabled = !isReconnecting,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = MaterialTheme.shapes.small,
                             modifier = Modifier.testTag("modal_reconnect_btn")
                         ) {
                             if (isReconnecting) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                LoadingIndicator(modifier = Modifier.size(20.dp))
                             } else {
                                 Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                             }
@@ -306,7 +305,7 @@ fun ShizukuSettingsSheet(
 
             // Wi-Fi & Wireless Debugging Card
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -329,8 +328,7 @@ fun ShizukuSettingsSheet(
                         Column {
                             Text(
                                 text = if (isWifiConnected) "Wi-Fi Connected" else "Wi-Fi Disconnected",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelLargeEmphasized,
                             )
                             Text(
                                 text = if (networkDescription.isNotBlank()) networkDescription else "Required for wireless pairing",
@@ -362,7 +360,6 @@ fun ShizukuSettingsSheet(
             Text(
                 text = "Diagnostics & Tools",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
@@ -372,12 +369,12 @@ fun ShizukuSettingsSheet(
             ) {
                 // Console button
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(MaterialTheme.shapes.medium)
                         .clickable {
                             onDismiss()
                             onOpenConsole()
@@ -394,8 +391,7 @@ fun ShizukuSettingsSheet(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Terminal Console",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.labelLargeEmphasized,
                         )
                         Text(
                             text = "Execute test shell commands",
@@ -407,12 +403,12 @@ fun ShizukuSettingsSheet(
 
                 // Diagnostics button
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(MaterialTheme.shapes.medium)
                         .clickable {
                             onDismiss()
                             onOpenDiagnostics()
@@ -429,8 +425,7 @@ fun ShizukuSettingsSheet(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Diagnostics",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.labelLargeEmphasized,
                         )
                         Text(
                             text = "Health checks & service ping",
@@ -443,12 +438,12 @@ fun ShizukuSettingsSheet(
 
             // Setup Guide Button Tile
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(MaterialTheme.shapes.medium)
                     .clickable {
                         onDismiss()
                         onOpenSetupGuide()
@@ -477,8 +472,7 @@ fun ShizukuSettingsSheet(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Wireless ADB Setup Walkthrough",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.labelLargeEmphasized,
                         )
                         Text(
                             text = "Step-by-step pairing guide for Pixel devices",
@@ -497,15 +491,14 @@ fun ShizukuSettingsSheet(
 
             // Explanation of Elevated Permissions
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = "Supported Elevated Settings:",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelMediumEmphasized,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
@@ -522,16 +515,26 @@ fun ShizukuSettingsSheet(
                             "Wi-Fi & Bluetooth"
                         ).forEach { feature ->
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.surface
                             ) {
-                                Text(
-                                    text = "✓ $feature",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = feature,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

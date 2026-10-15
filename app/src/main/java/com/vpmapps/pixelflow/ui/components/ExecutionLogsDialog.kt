@@ -1,5 +1,7 @@
 package com.vpmapps.pixelflow.ui.components
 
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +45,6 @@ import androidx.compose.ui.unit.sp
 import com.vpmapps.pixelflow.data.model.RoutineExecutionLog
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 @Composable
 fun ExecutionLogsDialog(
@@ -51,7 +52,9 @@ fun ExecutionLogsDialog(
     onClearLogs: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val dateFormat = SimpleDateFormat("MMM dd, HH:mm:ss", Locale.getDefault())
+    // Read the locale from the configuration so the dialog updates if the user changes language
+    val locale = LocalConfiguration.current.locales[0]
+    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, HH:mm:ss", locale) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -72,7 +75,6 @@ fun ExecutionLogsDialog(
                     Text(
                         text = "Execution History",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
                     )
                 }
                 if (logs.isNotEmpty()) {
@@ -109,7 +111,7 @@ fun ExecutionLogsDialog(
                     items(logs) { log ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                             )
@@ -123,7 +125,6 @@ fun ExecutionLogsDialog(
                                     Text(
                                         text = log.routineTitle,
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
@@ -178,7 +179,7 @@ fun ExecutionLogsDialog(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(MaterialTheme.shapes.extraSmall)
                                             .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
                                             .padding(6.dp)
                                     ) {
@@ -196,15 +197,15 @@ fun ExecutionLogsDialog(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFF1E1E24))
+                                            .clip(MaterialTheme.shapes.extraSmall)
+                                            .background(MaterialTheme.colorScheme.inverseSurface)
                                             .padding(6.dp)
                                     ) {
                                         Text(
                                             text = log.outputDetails,
                                             fontFamily = FontFamily.Monospace,
                                             fontSize = 11.sp,
-                                            color = Color(0xFFE0E0E0)
+                                            color = MaterialTheme.colorScheme.inverseOnSurface
                                         )
                                     }
                                 }
