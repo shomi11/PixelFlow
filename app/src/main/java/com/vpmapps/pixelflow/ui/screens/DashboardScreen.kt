@@ -1,5 +1,14 @@
 package com.vpmapps.pixelflow.ui.screens
 
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Favorite
+import com.vpmapps.pixelflow.ui.components.SupporterBadge
+import com.vpmapps.pixelflow.ui.components.SupportSheet
+import com.vpmapps.pixelflow.review.ReviewPrompter
+import com.vpmapps.pixelflow.billing.SupporterBilling
+import androidx.activity.compose.LocalActivity
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItem
@@ -238,11 +247,30 @@ fun DashboardScreen(
     var showShizukuSheet by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var filterActiveOnly by remember { mutableStateOf(false) }
+    var showSupportSheet by remember { mutableStateOf(false) }
+    val supporter by SupporterBilling.state.collectAsState()
+    val activity = LocalActivity.current
+    val supportPrefs = remember { context.getSharedPreferences("support_prompt", Context.MODE_PRIVATE) }
+    var supportCardDismissedAt by remember { mutableStateOf(supportPrefs.getLong("dismissed_at", 0L)) }
 
     LaunchedEffect(Unit) {
         viewModel.userMessage.collectLatest { message ->
             snackbarHostState.showSnackbar(message)
         }
+    }
+
+    LaunchedEffect(supporter.message) {
+        supporter.message?.let {
+            SupporterBilling.clearMessage()
+            snackbarHostState.showSnackbar(it)
+        }
+    }
+
+    // Ask for a Play review at a calm moment (opening the dashboard), only once the app has proven
+    // useful; ReviewPrompter enforces the rules and Play decides whether to show anything.
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2_000)
+        activity?.let { ReviewPrompter.maybeAskForReview(it) }
     }
 
     val displayedRoutines = if (filterActiveOnly) {
@@ -258,7 +286,15 @@ fun DashboardScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text(text = "PixelFlow") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "PixelFlow")
+                        if (supporter.isSupporter) {
+                            Spacer(modifier = Modifier.width(10.dp))
+                            SupporterBadge(modifier = Modifier.clickable { showSupportSheet = true })
+                        }
+                    }
+                },
                 subtitle = {
                     val activeCount = routines.count { it.isEnabled }
                     Text(if (activeCount == 1) "1 routine on" else "$activeCount routines on")
@@ -308,6 +344,31 @@ fun DashboardScreen(
                             expanded = showMoreMenu,
                             onDismissRequest = { showMoreMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(if (supporter.isSupporter) "Your support" else "Support PixelFlow") },
+                                onClick = {
+                                    haptics.buttonClick()
+                                    showMoreMenu = false
+                                    showSupportSheet = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                modifier = Modifier.testTag("menu_support")
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Rate PixelFlow") },
+                                onClick = {
+                                    haptics.buttonClick()
+                                    showMoreMenu = false
+                                    ReviewPrompter.openStoreListing(context)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                modifier = Modifier.testTag("menu_rate")
+                            )
+                            HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text("Shizuku Controls") },
                                 onClick = {
@@ -627,7 +688,28 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            // A gentle, dismissible support card at the end of the list, only once the user has a
+            // routine running, never for supporters, and hidden for 60 days after "Not now".
+            val supportCardSnoozed = System.currentTimeMillis() - supportCardDismissedAt < 60L * 24 * 60 * 60 * 1000
+            if (!supporter.isSupporter && !supportCardSnoozed && routines.any { it.isEnabled }) {
+                item(key = "support_card") {
+                    SupportCard(
+                        onSupport = { showSupportSheet = true },
+                        onNotNow = {
+                            val now = System.currentTimeMillis()
+                            supportPrefs.edit().putLong("dismissed_at", now).apply()
+                            supportCardDismissedAt = now
+                        },
+                        modifier = Modifier.animateItem()
+                    )
+                }
+            }
         }
+    }
+
+    if (showSupportSheet) {
+        SupportSheet(onDismiss = { showSupportSheet = false })
     }
 
     if (showConsoleDialog) {
@@ -1232,6 +1314,33 @@ fun RoutineCard(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun SupportCard(onSupport: () -> Unit, onNotNow: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("support_card"),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Enjoying PixelFlow?", style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                text = "Every feature is free, with no ads. If PixelFlow saves you time, you can support it and get a supporter badge.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.End)) {
+                TextButton(onClick = onNotNow, modifier = Modifier.testTag("support_card_not_now")) { Text("Not now") }
+                FilledTonalButton(onClick = onSupport, modifier = Modifier.testTag("support_card_open")) { Text("Support") }
+            }
+        }
     }
 }
 

@@ -99,6 +99,8 @@ class MainActivity : ComponentActivity() {
             ShizukuPermissionManager.onAppResumed()
             // The app is in the foreground here, so Android always allows starting the trigger service
             com.vpmapps.pixelflow.background.TriggerMonitorService.refresh(this)
+            // Picks up purchases made on another device and subscriptions that lapsed
+            com.vpmapps.pixelflow.billing.SupporterBilling.refresh()
         } catch (e: Throwable) {
             android.util.Log.e("MainActivity", "Error checking Shizuku on resume", e)
         }

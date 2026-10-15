@@ -67,6 +67,7 @@ class RoutineApplication : Application(), Configuration.Provider {
             RoutineAlarmManager.rescheduleAllRoutines(this)
             com.vpmapps.pixelflow.background.GeofenceManager.registerAllGeofences(this)
             com.vpmapps.pixelflow.background.TriggerMonitorService.refresh(this)
+            com.vpmapps.pixelflow.billing.SupporterBilling.init(this)
             com.vpmapps.pixelflow.widget.WidgetUpdateHelper.updateAllWidgets(this)
         } catch (e: Throwable) {
             Log.e(TAG, "Error initializing background helpers in RoutineApplication", e)

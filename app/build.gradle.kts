@@ -117,6 +117,8 @@ dependencies {
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.shizuku.api)
   implementation(libs.shizuku.provider)
+  implementation(libs.billing.ktx)
+  implementation(libs.play.review.ktx)
   // implementation(libs.coil.compose)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

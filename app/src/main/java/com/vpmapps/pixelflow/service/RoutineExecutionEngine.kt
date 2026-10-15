@@ -177,6 +177,10 @@ class RoutineExecutionEngine(private val context: Context) {
         )
         dao.insertLog(log)
 
+        if (overallSuccess) {
+            com.vpmapps.pixelflow.review.ReviewPrompter.recordSuccessfulRun(appContext)
+        }
+
         if (!overallSuccess && !shizukuReady && actions.any { it.type.requiresShizuku }) {
             RoutineNotificationManager.notifyShizukuUnavailable(appContext, routine.title)
         }
