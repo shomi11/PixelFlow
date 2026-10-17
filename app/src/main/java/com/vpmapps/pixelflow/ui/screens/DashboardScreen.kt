@@ -244,6 +244,7 @@ fun DashboardScreen(
     var showDiagnosticsDialog by remember { mutableStateOf(false) }
     var showNotificationDialog by remember { mutableStateOf(false) }
     var showShizukuSheet by remember { mutableStateOf(false) }
+    var showLocationDisclosure by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var filterActiveOnly by remember { mutableStateOf(false) }
     var showSupportSheet by remember { mutableStateOf(false) }
@@ -600,17 +601,10 @@ fun DashboardScreen(
                         SetupItem(
                             icon = Icons.Default.LocationOn,
                             title = "Allow location all the time",
-                            message = "Location routines only work in the background with \"Allow all the time\".",
+                            message = "Location routines need your location even when the app is closed or not in use.",
                             buttonLabel = "Allow",
-                            onClick = {
-                                if (!com.vpmapps.pixelflow.util.LocationHelper.hasLocationPermission(context)) {
-                                    foregroundLocationLauncher.launch(
-                                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                                    )
-                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                                }
-                            },
+                            // Play policy: explain background location before the system prompt
+                            onClick = { showLocationDisclosure = true },
                             testTag = "background_location_banner"
                         )
                     )
@@ -758,6 +752,52 @@ fun DashboardScreen(
             },
             onSendTest = { viewModel.sendTestNotification() },
             onDismiss = { showNotificationDialog = false }
+        )
+    }
+
+    if (showLocationDisclosure) {
+        AlertDialog(
+            onDismissRequest = { showLocationDisclosure = false },
+            icon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+            title = { Text("Use location in the background?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "PixelFlow collects your location to run your location routines when you arrive at or leave " +
+                            "the places you chose, even when the app is closed or not in use."
+                    )
+                    Text(
+                        "Your location is only checked on this device against those places. It is never stored " +
+                            "elsewhere or shared."
+                    )
+                    Text(
+                        if (com.vpmapps.pixelflow.util.LocationHelper.hasLocationPermission(context)) {
+                            "On the next screen, choose \"Allow all the time\"."
+                        } else {
+                            "First allow location access. Then tap Allow again and choose \"Allow all the time\"."
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLocationDisclosure = false
+                        if (!com.vpmapps.pixelflow.util.LocationHelper.hasLocationPermission(context)) {
+                            foregroundLocationLauncher.launch(
+                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                            )
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            backgroundLocationLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                        }
+                    },
+                    modifier = Modifier.testTag("location_disclosure_continue")
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocationDisclosure = false }) { Text("Not now") }
+            }
         )
     }
 

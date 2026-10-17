@@ -17,7 +17,7 @@ android {
     applicationId = "com.vpmapps.pixelflow"
     minSdk = 26
     targetSdk = 36
-    versionCode = 2
+    versionCode = 3
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
