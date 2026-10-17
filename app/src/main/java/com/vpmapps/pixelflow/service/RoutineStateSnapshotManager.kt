@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.wifi.WifiManager
-import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -192,12 +191,16 @@ object RoutineStateSnapshotManager {
 
     private suspend fun queryCurrentDarkMode(context: Context): Boolean {
         return try {
+            // nightMode is the system setting, not PixelFlow's own theme. For AUTO/CUSTOM schedules it
+            // doesn't say whether dark is active right now, so read the current configuration instead.
             val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-            if (uiModeManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                uiModeManager.nightMode == UiModeManager.MODE_NIGHT_YES
-            } else {
-                val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-                mode == Configuration.UI_MODE_NIGHT_YES
+            when (uiModeManager?.nightMode) {
+                UiModeManager.MODE_NIGHT_YES -> true
+                UiModeManager.MODE_NIGHT_NO -> false
+                else -> {
+                    val mode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+                    mode == Configuration.UI_MODE_NIGHT_YES
+                }
             }
         } catch (e: Exception) {
             val res = ShizukuManager.executeCommand("settings get secure ui_night_mode")

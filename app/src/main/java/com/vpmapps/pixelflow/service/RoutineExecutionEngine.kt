@@ -53,6 +53,10 @@ class RoutineExecutionEngine(private val context: Context) {
     private val database = AppDatabase.getDatabase(appContext)
     private val dao = database.routineDao()
 
+    init {
+        clearLegacyAppNightModeOverride(appContext)
+    }
+
     /**
      * Runs the routine's actions. If the same routine is already running (e.g. a widget tap while its
      * alarm fires), the second request is skipped instead of interleaving with the first, which
@@ -335,16 +339,7 @@ class RoutineExecutionEngine(private val context: Context) {
                 ShizukuManager.setAutoRotate(action.enabledState)
             }
             ActionType.DARK_MODE -> {
-                try {
-                    val uiModeManager = appContext.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && uiModeManager != null) {
-                        uiModeManager.setApplicationNightMode(
-                            if (action.enabledState) UiModeManager.MODE_NIGHT_YES else UiModeManager.MODE_NIGHT_NO
-                        )
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Native UiModeManager set failed: ${e.message}")
-                }
+                // System theme only. setApplicationNightMode would pin PixelFlow's own theme instead.
                 ShizukuManager.setDarkMode(action.enabledState)
             }
             ActionType.SOUND_PROFILE -> {
@@ -597,6 +592,27 @@ class RoutineExecutionEngine(private val context: Context) {
                 executedCommand = "AudioManager.setRingerMode($mode)",
                 isSuccess = false
             )
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var legacyNightModeOverrideCleared = false
+
+        /**
+         * Older builds applied the Dark Mode action with UiModeManager.setApplicationNightMode, which
+         * persists a per-app YES/NO override and stops PixelFlow following the system theme. AUTO
+         * resets that override to "undefined", so the app follows the system again. Runs once per process.
+         */
+        private fun clearLegacyAppNightModeOverride(context: Context) {
+            if (legacyNightModeOverrideCleared || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+            legacyNightModeOverrideCleared = true
+            try {
+                val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+                uiModeManager?.setApplicationNightMode(UiModeManager.MODE_NIGHT_AUTO)
+            } catch (e: Exception) {
+                Log.w("RoutineExecutionEngine", "Could not clear app night mode override: ${e.message}")
+            }
         }
     }
 }
