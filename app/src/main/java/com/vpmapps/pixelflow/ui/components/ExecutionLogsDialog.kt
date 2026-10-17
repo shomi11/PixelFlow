@@ -198,14 +198,14 @@ fun ExecutionLogsDialog(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(MaterialTheme.shapes.extraSmall)
-                                            .background(MaterialTheme.colorScheme.inverseSurface)
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                                             .padding(6.dp)
                                     ) {
                                         Text(
                                             text = log.outputDetails,
                                             fontFamily = FontFamily.Monospace,
                                             fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.inverseOnSurface
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }

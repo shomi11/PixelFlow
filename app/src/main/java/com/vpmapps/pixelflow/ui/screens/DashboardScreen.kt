@@ -27,7 +27,6 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -946,7 +945,11 @@ fun RoutineCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isExecutingNow) "Running • Executing actions" else "Running • Conditions met",
+                            text = when {
+                                isExecutingNow -> "Running • Executing actions"
+                                isInActiveSchedule -> "Running • Conditions met"
+                                else -> "Running • Started manually"
+                            },
                             style = MaterialTheme.typography.labelMediumEmphasized,
                             color = MaterialTheme.colorScheme.tertiary
                         )
@@ -1095,8 +1098,7 @@ fun RoutineCard(
             if (routine.restoreOnEnd) {
                 Surface(
                     shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     shadowElevation = 0.dp,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1125,12 +1127,12 @@ fun RoutineCard(
                             Text(
                                 text = "Auto-restore on",
                                 style = MaterialTheme.typography.labelSmallEmphasized,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Reverts modified device settings when routine finishes",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.9f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
