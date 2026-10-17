@@ -1,36 +1,50 @@
 package com.vpmapps.pixelflow.background
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.util.Log
+import androidx.core.content.ContextCompat
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofenceStatusCodes
+import com.google.android.gms.location.GeofencingRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.Tasks
 import com.vpmapps.pixelflow.data.local.AppDatabase
 import com.vpmapps.pixelflow.data.model.Routine
 import com.vpmapps.pixelflow.data.model.TriggerType
-import com.vpmapps.pixelflow.util.LocationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
- * Coordinates high-precision geolocation and geofence triggers using Android's
- * LocationManager Proximity Alerts and exact geographic distance calculations.
+ * Registers location routines with the Google Play services Geofencing API. Geofences are kept
+ * and evaluated on the device by Play services; each one reports both entering and leaving so
+ * [TriggerEvaluator] always knows whether the device is inside the routine's area.
+ *
+ * Earlier versions used LocationManager proximity alerts, which Android only checks every
+ * 30 minutes while the app is in the background.
  */
 object GeofenceManager {
     private const val TAG = "GeofenceManager"
     const val ACTION_GEOFENCE_TRANSITION = "com.vpmapps.pixelflow.ACTION_GEOFENCE_TRANSITION"
-    const val EXTRA_ROUTINE_ID = "extra_routine_id"
-    const val EXTRA_TARGET_LAT = "extra_target_lat"
-    const val EXTRA_TARGET_LNG = "extra_target_lng"
-    const val EXTRA_RADIUS_METERS = "extra_radius_meters"
-    const val EXTRA_TRANSITION_TYPE = "extra_transition_type"
+
+    // One PendingIntent for every geofence; Play services adds which ones fired as extras.
+    private const val GEOFENCE_REQUEST_CODE = 69_999
+
+    // Request codes and extras of the per-routine proximity alerts from earlier versions
+    private const val LEGACY_REQUEST_CODE_OFFSET = 70_000
+    private const val LEGACY_EXTRA_ROUTINE_ID = "extra_routine_id"
 
     /**
-     * Registers a precision proximity alert geofence for the given routine.
+     * Registers (or replaces) the geofence for the given routine.
      */
     @SuppressLint("MissingPermission")
     fun registerGeofence(context: Context, routine: Routine) {
@@ -40,8 +54,10 @@ object GeofenceManager {
             return
         }
 
-        if (!LocationHelper.hasLocationPermission(context)) {
-            Log.w(TAG, "Cannot register geofence for \"${routine.name}\": location permission not granted")
+        // Play services needs precise location; on Android 10+ it also refuses geofences
+        // without background location (re-registered once the dashboard gets it).
+        if (!hasFineLocation(context)) {
+            Log.w(TAG, "Cannot register geofence for \"${routine.name}\": precise location not granted")
             return
         }
 
@@ -57,49 +73,74 @@ object GeofenceManager {
                 return
             }
 
-            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
-            val pendingIntent = createGeofencePendingIntent(context, routine.id, lat, lng, radius.toInt(), transition)
+            val geofence = Geofence.Builder()
+                .setRequestId(routine.id.toString())
+                .setCircularRegion(lat, lng, radius)
+                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+                .build()
+            // Report the current side right away so the routine doesn't wait for the first crossing
+            val request = GeofencingRequest.Builder()
+                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER or GeofencingRequest.INITIAL_TRIGGER_EXIT)
+                .addGeofence(geofence)
+                .build()
 
-            // The area may have changed; re-estimate inside/outside until the first crossing arrives
+            // The area may have changed; re-estimate inside/outside until Play services reports it
             DeviceFactsStore.clearGeofence(context, routine.id)
-            // -1L indicates expiration in infinity (active until removed)
-            locationManager.addProximityAlert(lat, lng, radius, -1L, pendingIntent)
-            Log.i(TAG, "Registered proximity geofence for \"${routine.name}\" (ID: ${routine.id}) at ($lat, $lng, r=${radius}m, on=$transition)")
+            // Adding a geofence with an existing request id replaces it
+            LocationServices.getGeofencingClient(context)
+                .addGeofences(request, geofencePendingIntent(context))
+                .addOnSuccessListener {
+                    Log.i(TAG, "Registered geofence for \"${routine.name}\" (ID: ${routine.id}) at ($lat, $lng, r=${radius}m, on=$transition)")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Failed to register geofence for \"${routine.name}\": ${describe(e)}")
+                }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register geofence for routine ${routine.name}", e)
         }
     }
 
     /**
-     * Removes the proximity alert geofence associated with the given routine ID.
+     * Removes the geofence associated with the given routine ID.
      */
-    @SuppressLint("MissingPermission")
     fun removeGeofence(context: Context, routineId: Long) {
         try {
-            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
-            val pendingIntent = createGeofencePendingIntent(context, routineId, 0.0, 0.0, 0, "ENTER")
-            locationManager.removeProximityAlert(pendingIntent)
-            pendingIntent.cancel()
-            Log.i(TAG, "Removed proximity geofence for routine ID: $routineId")
+            LocationServices.getGeofencingClient(context)
+                .removeGeofences(listOf(routineId.toString()))
+                .addOnSuccessListener { Log.i(TAG, "Removed geofence for routine ID: $routineId") }
+                .addOnFailureListener { e -> Log.w(TAG, "Error removing geofence for routine ID $routineId: ${describe(e)}") }
         } catch (e: Exception) {
             Log.w(TAG, "Error removing geofence for routine ID: $routineId", e)
         }
+        removeLegacyProximityAlert(context, routineId)
     }
 
     /**
-     * Registers all active geolocation routines stored in the Room database.
+     * Registers all active location routines stored in the Room database. Play services forgets
+     * geofences after a reboot, an app update or when location is turned off, so this runs on
+     * every app start and boot.
      */
     fun registerAllGeofences(context: Context) {
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getDatabase(context)
-                val activeRoutines = db.routineDao().getActiveRoutines()
-                for (routine in activeRoutines) {
-                    if (routine.hasCondition(TriggerType.LOCATION)) {
-                        registerGeofence(context, routine)
+                val routines = AppDatabase.getDatabase(appContext).routineDao().getAllRoutinesList()
+                // Start from a clean slate so geofences of deleted routines don't linger
+                try {
+                    Tasks.await(LocationServices.getGeofencingClient(appContext).removeGeofences(geofencePendingIntent(appContext)))
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error clearing geofences before re-registering", e)
+                }
+                var registered = 0
+                for (routine in routines) {
+                    removeLegacyProximityAlert(appContext, routine.id)
+                    if (routine.isEnabled && routine.hasCondition(TriggerType.LOCATION)) {
+                        registerGeofence(appContext, routine)
+                        registered++
                     }
                 }
-                Log.i(TAG, "Evaluated and registered active geofences (${activeRoutines.size} routines evaluated)")
+                Log.i(TAG, "Registering $registered geofences (${routines.size} routines checked)")
             } catch (e: Exception) {
                 Log.e(TAG, "Error registering all geofences", e)
             }
@@ -115,27 +156,55 @@ object GeofenceManager {
         return results[0]
     }
 
-    private fun createGeofencePendingIntent(
-        context: Context,
-        routineId: Long,
-        lat: Double,
-        lng: Double,
-        radiusMeters: Int,
-        transition: String
-    ): PendingIntent {
+    private fun hasFineLocation(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun describe(e: Exception): String =
+        if (e is ApiException) GeofenceStatusCodes.getStatusCodeString(e.statusCode) else e.toString()
+
+    private fun geofencePendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, GeofenceTriggerReceiver::class.java).apply {
             action = ACTION_GEOFENCE_TRANSITION
-            putExtra(EXTRA_ROUTINE_ID, routineId)
-            putExtra(EXTRA_TARGET_LAT, lat)
-            putExtra(EXTRA_TARGET_LNG, lng)
-            putExtra(EXTRA_RADIUS_METERS, radiusMeters)
-            putExtra(EXTRA_TRANSITION_TYPE, transition)
         }
+        // Must be mutable so Play services can attach the geofencing event
         return PendingIntent.getBroadcast(
             context,
-            (routineId + 70000).toInt(),
+            GEOFENCE_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
+    }
+
+    /** True for a proximity alert broadcast registered by an earlier version. */
+    fun isLegacyProximityAlert(intent: Intent): Boolean =
+        intent.hasExtra(LocationManager.KEY_PROXIMITY_ENTERING)
+
+    fun legacyRoutineId(intent: Intent): Long = intent.getLongExtra(LEGACY_EXTRA_ROUTINE_ID, -1L)
+
+    /**
+     * Removes the LocationManager proximity alert an earlier version may have left for this
+     * routine, so it doesn't report crossings alongside the Play services geofence.
+     */
+    @SuppressLint("MissingPermission")
+    fun removeLegacyProximityAlert(context: Context, routineId: Long) {
+        val intent = Intent(context, GeofenceTriggerReceiver::class.java).apply {
+            action = ACTION_GEOFENCE_TRANSITION
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            (routineId + LEGACY_REQUEST_CODE_OFFSET).toInt(),
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_MUTABLE
+        ) ?: return
+        try {
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            locationManager?.removeProximityAlert(pendingIntent)
+            Log.i(TAG, "Removed legacy proximity alert for routine ID: $routineId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error removing legacy proximity alert for routine ID: $routineId", e)
+        } finally {
+            pendingIntent.cancel()
+        }
     }
 }

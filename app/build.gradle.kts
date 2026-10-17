@@ -17,7 +17,7 @@ android {
     applicationId = "com.vpmapps.pixelflow"
     minSdk = 26
     targetSdk = 36
-    versionCode = 3
+    versionCode = 4
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -134,7 +134,7 @@ dependencies {
   // implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  // implementation(libs.play.services.location)
+  implementation(libs.play.services.location)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

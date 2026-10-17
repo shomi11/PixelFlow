@@ -129,6 +129,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.vpmapps.pixelflow.background.GeofenceManager
 import com.vpmapps.pixelflow.background.RoutineAlarmManager
 import com.vpmapps.pixelflow.ui.components.ExpressiveFilterChip
 import com.vpmapps.pixelflow.ui.components.ExpressiveSwitch
@@ -201,12 +202,18 @@ fun DashboardScreen(
     var hasBackgroundLocation by remember { mutableStateOf(SpecialAccessHelper.hasBackgroundLocation(context)) }
     var isBatteryUnrestricted by remember { mutableStateOf(NetworkStatusMonitor.isAppBatteryOptimizationIgnored(context)) }
 
+    // Play services only accepts geofences once background location is allowed, so add them then
+    fun refreshBackgroundLocation() {
+        val granted = SpecialAccessHelper.hasBackgroundLocation(context)
+        if (granted && !hasBackgroundLocation) GeofenceManager.registerAllGeofences(context)
+        hasBackgroundLocation = granted
+    }
     val backgroundLocationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context) }
+    ) { refreshBackgroundLocation() }
     val foregroundLocationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context) }
+    ) { refreshBackgroundLocation() }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
@@ -222,7 +229,7 @@ fun DashboardScreen(
                 hasDndAccess = notificationManager?.isNotificationPolicyAccessGranted == true
                 canScheduleExactAlarms = SpecialAccessHelper.canScheduleExactAlarms(context)
                 hasUsageAccess = SpecialAccessHelper.hasUsageAccess(context)
-                hasBackgroundLocation = SpecialAccessHelper.hasBackgroundLocation(context)
+                refreshBackgroundLocation()
                 isBatteryUnrestricted = NetworkStatusMonitor.isAppBatteryOptimizationIgnored(context)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     hasNotificationPermission = ContextCompat.checkSelfPermission(
